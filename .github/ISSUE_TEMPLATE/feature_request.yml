@@ -1,0 +1,39 @@
+name: 功能建议
+description: 提出一个可落地的改进建议
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先确认该建议不涉及自动提交、监考规避或风控绕过——这些不在项目范围内。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决的问题
+      description: 当前哪里不方便？影响哪些场景？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 你希望如何实现？是否有参考项目或页面结构？
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 备选方案（可选）
+  - type: input
+    id: site
+    attributes:
+      label: 相关站点
+      placeholder: 学习通 / Wayground / 通用网页
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: 范围确认
+      options:
+        - label: 该建议不涉及自动交卷、绕过监考或风控
+          required: true

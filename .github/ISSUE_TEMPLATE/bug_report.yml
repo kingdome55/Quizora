@@ -1,0 +1,72 @@
+name: Bug 反馈
+description: 报告一个可复现的问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。提交前请确认：
+        - 已重新加载扩展，并刷新目标页面；
+        - 日志与截图已隐去 API Key、Cookie、URL 中的个人参数；
+        - 已阅读 `docs/TROUBLESHOOTING.md`。
+  - type: textarea
+    id: what
+    attributes:
+      label: 问题描述
+      description: 发生了什么？你期望发生什么？
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开……
+        2. 点击……
+        3. 结果……
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器与版本
+      placeholder: 例如 Edge 142 / Chrome 142
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 题灵版本
+      placeholder: 例如 0.5.3（见 manifest.json 或扩展管理页）
+    validations:
+      required: true
+  - type: input
+    id: site
+    attributes:
+      label: 站点与页面类型
+      placeholder: 例如 学习通章节测验 / 作业 / Wayground 对局 / 通用网页
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志
+      description: 粘贴面板日志或探测诊断；请删除 Key、Cookie 与个人 URL 参数。
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图（可选）
+      description: 请打码个人信息与 URL 参数。
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我已移除 API Key、Cookie 与个人隐私信息
+          required: true
+        - label: 我已尝试更新到最新版本
+          required: true

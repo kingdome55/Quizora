@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用与安装文档
+    url: https://github.com/kingdome55/QuizPilot/blob/main/docs/INSTALL.md
+    about: 安装、更新、卸载与常见问题
+  - name: 踩坑与排障
+    url: https://github.com/kingdome55/QuizPilot/blob/main/docs/TROUBLESHOOTING.md
+    about: 探测 0 题、无法写入、日志排查
+  - name: 安全问题
+    url: https://github.com/kingdome55/QuizPilot/blob/main/SECURITY.md
+    about: 请勿在公开 Issue 中披露安全细节
