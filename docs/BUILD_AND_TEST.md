@@ -90,7 +90,7 @@ window.__wg.cxAdapter.snapshot()
 
 > 该 mock 只验证**扫描**，不验证 LMM 调用、不验证真实页面写入与 UEditor 同步。
 
-## 6. 真机验证清单（0.5.3 待执行）
+## 6. 真机验证清单（0.5.4 待执行）
 
 以“学习通混合卷（5 单选 + 5 多选 + 1 简答）”为样本：
 
@@ -129,13 +129,14 @@ Wayground 回归（另开一局或复用测试局）：
 
 ## 8. 回滚方式
 
-**当前没有 Git**，只能靠目录备份：
+**0.5.3 之前没有 Git**，只能靠目录备份；0.5.3 起已建立仓库并推送 main/tag。回滚建议：
 
-1. 每次改代码前复制整个 `wayground-auto/` 为 `wayground-auto-backup-YYYYMMDD-HHMM/`；
-2. 回滚时用备份目录重新“加载解压缩的扩展”；
-3. 注意扩展 ID 可能随路径变化，旧页面需刷新。
+1. 优先使用 Git：`git checkout <已知良好 tag>`，或从 Release 下载对应版本；
+2. 同时保留目录备份：复制整个 `wayground-auto/` 为 `wayground-auto-backup-YYYYMMDD-HHMM/`；
+3. 回滚后用备份目录重新“加载解压缩的扩展”；
+4. 注意扩展 ID 可能随路径变化，旧页面需刷新。
 
-推荐下一阶段立刻 `git init` 并打 tag（见 NEXT_STEPS）。
+后续优先补 CI 静态检查，并把 mock 迁入仓库（见 NEXT_STEPS）。
 
 ## 9. 发布流程（当前手工）
 

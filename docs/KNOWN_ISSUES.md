@@ -13,7 +13,7 @@
 | K4 | 题目分散在多个兄弟 frame 时只会处理一个 frame | P1 | ✗ | 架构上只向单个 frame 发 `WG_START` |
 | K5 | 不支持题型：连线/拖拽/编程/听力；Wayground 多选/图片 | P2 | ✗ | 代码/方案文档 |
 | K6 | 失效配置死代码：`pauseOnLowConfidence`、`confidenceThreshold` | P2 | ✗ | `main.js` / `solver.js` 仍有引用 |
-| K7 | 无 Git、无 CI、无仓库内测试 | P2 | ✗ | 工程现状 |
+| K7 | 缺 CI 与仓库内自动化测试 | P2 | ✗ | 工程现状；mock 仍在仓库外 |
 | K8 | 权限过宽、Key 明文、`permissions.request` 冗余 | P2 | ✗ | `manifest.json` / `panel.js` |
 | K9 | 大页面扫描性能未量化，`roots()` 递归有重复开销 | P2 | ○ | 代码结构 |
 | K10 | 已答 key 依赖题干与 URL，乱码/一次性参数会导致跳过失效 | P2 | ✗ | `cx-main.js` |

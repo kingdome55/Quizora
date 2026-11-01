@@ -396,7 +396,10 @@
       const n = q.options.filter((o) => isSelected(o)).length;
       if (q.type === 'multiple' ? n > 0 && n < q.options.length : n === 1) return true;
     }
-    if (q.inputs?.some((i) => norm(i.isContentEditable ? i.innerText : i.value) && !/^请输入/.test(norm(i.isContentEditable ? i.innerText : i.value)))) return true;
+    if (q.inputs?.length) {
+      const values = q.inputs.map((i) => norm(i.isContentEditable ? i.innerText : i.value));
+      return values.every((v) => v && !/^请输入/.test(v));
+    }
     if (q.textarea && norm(q.textarea.value) && !/^请输入/.test(norm(q.textarea.value))) return true;
     if (q.editable && norm(q.editable.innerText) && !/^请输入/.test(norm(q.editable.innerText))) return true;
     if (q.iframe) {

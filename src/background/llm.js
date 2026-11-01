@@ -13,6 +13,7 @@ const EXAM_PROMPT = `你是严谨的考试答题助手，根据题型、题干�
 - single（单选）/ judge（判断）：indices 只放 1 个 0 基下标；
 - multiple（多选）：indices 必须包含全部正确下标，按升序；不要为了凑“多选”而添加错误项，只有一个正确项时也可只给一个；
 - blank（填空）：blanks 按空格顺序给出，只给要填入的词/短语，不要解释；数量必须等于题目要求的空格数；
+  blanks 的每个元素只对应一个空，不要把多个空的答案合并成一个字符串，也不要用“；”“、”等分隔符塞进一个元素；
 - short（简答/论述）：text 用中文作答，分点陈述，80-200 字；
 - 计算/电路/图片题：先结合图片完成计算，只给最终结果；
 - 不确定时给出最可能的答案，并把 confidence 调低。`;
@@ -80,6 +81,8 @@ function buildExamMessages({ question, type, options, blankCount, images = [] })
   if (type === 'blank') {
     lines.push(`\n空格数量：${blankCount || 1}`);
     lines.push('blanks 数组长度必须与空格数量一致。');
+    lines.push('第 1 个元素对应第 1 空，第 2 个对应第 2 空，以此类推。');
+    lines.push('每个元素只写一个空的答案；不要用分隔符把多个空合并进一个元素。');
   }
   if (images.length) lines.push('\n题干图片已附上，请结合图片理解题意。');
 
@@ -149,6 +152,16 @@ function normalize(parsed, count, kind) {
   return { ok: true, index, confidence, reason };
 }
 
+function splitCombinedBlanks(value, count) {
+  const text = String(value || '').trim();
+  if (!text || count < 2) return null;
+  const parts = text
+    .split(/\r?\n|；|;|、|\||｜|\s+\/\s+|／/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return parts.length === count ? parts : null;
+}
+
 function normalizeExam(parsed, type, optionCount, blankCount) {
   if (!parsed) return { ok: false, error: '模型返回无法解析' };
   const confidence = Math.max(0, Math.min(1, Number(parsed.confidence ?? 0.7) || 0.7));
@@ -174,8 +187,12 @@ function normalizeExam(parsed, type, optionCount, blankCount) {
 
   if (type === 'blank') {
     const raw = Array.isArray(parsed.blanks) ? parsed.blanks : [parsed.text];
-    const blanks = raw.map((s) => String(s ?? '').trim()).filter(Boolean);
+    let blanks = raw.map((s) => String(s ?? '').trim()).filter(Boolean);
     if (!blanks.length) return { ok: false, error: '模型未给出填空答案' };
+    if (blanks.length === 1 && blankCount > 1) {
+      const split = splitCombinedBlanks(blanks[0], blankCount);
+      if (split) blanks = split;
+    }
     const out = blankCount > 0 ? blanks.slice(0, blankCount) : blanks;
     return { ok: true, blanks: out, confidence, reason, partial: blankCount > 0 && out.length < blankCount };
   }

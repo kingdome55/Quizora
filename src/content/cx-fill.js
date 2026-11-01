@@ -79,6 +79,16 @@
     return true;
   }
 
+  function splitCombinedBlanks(value, count) {
+    const text = String(value || '').trim();
+    if (!text || count < 2) return null;
+    const parts = text
+      .split(/\r?\n|；|;|、|\||｜|\s+\/\s+|／/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return parts.length === count ? parts : null;
+  }
+
   function fillBlanks(q, blanks) {
     if (!blanks.length) return { ok: false, complete: false };
     const inputs = q.inputs;
@@ -88,15 +98,23 @@
       }
       return { ok: false, complete: false };
     }
-    const count = Math.min(inputs.length, blanks.length);
+    let list = blanks.map((s) => String(s || '').trim()).filter(Boolean);
+    if (list.length === 1 && inputs.length > 1) {
+      const split = splitCombinedBlanks(list[0], inputs.length);
+      if (split) list = split;
+    }
+    const count = Math.min(inputs.length, list.length);
+    let written = 0;
     for (let i = 0; i < count; i += 1) {
       const input = inputs[i];
       input.scrollIntoView({ block: 'center', inline: 'center' });
       input.focus();
-      setNativeValue(input, blanks[i]);
+      setNativeValue(input, list[i]);
+      const value = norm(input.isContentEditable ? input.innerText : input.value);
+      if (value) written += 1;
       input.blur();
     }
-    return { ok: count > 0, complete: count === inputs.length };
+    return { ok: written > 0, complete: written === inputs.length };
   }
 
   function escapeHtml(text) {

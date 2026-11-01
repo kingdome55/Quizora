@@ -149,11 +149,11 @@
             F.mark(q, 'fail', '无可用输入控件');
             continue;
           }
-          const answered = q.answered || /(done|answered|complete|finished|saved)/i.test(String(q.el?.className || ''));
-          if (settings.examSkipAnswered && (answered || doneKeys.has(q.key))) {
+          const answered = q.answered;
+          if (settings.examSkipAnswered && answered) {
             skipped += 1;
-            F.mark(q, 'skip', answered ? '已有答案' : '已处理过');
-            if (answered) doneKeys.add(q.key);
+            F.mark(q, 'skip', '已有答案');
+            doneKeys.add(q.key);
             continue;
           }
 
