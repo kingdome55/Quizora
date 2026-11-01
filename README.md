@@ -61,22 +61,22 @@
 
 ### 方式一：使用发布包（推荐）
 
-1. 下载安装包：[`release/quizora-v0.6.0.zip`](release/quizora-v0.6.0.zip)。
+1. 下载安装包：[GitHub Release v0.6.0](https://github.com/kingdome55/Quizora/releases/download/v0.6.0/quizora-v0.6.0.zip)（备用：[仓库内 ZIP](release/quizora-v0.6.0.zip)）。
 2. **完整解压**到一个固定目录，例如 `D:\Quizora\`。解压后该目录里应直接看到 `manifest.json`。
 3. 打开 `edge://extensions`（Chrome 为 `chrome://extensions`）。
 4. 打开右上角“开发人员模式”。
 5. 点击“加载解压缩的扩展”，选择解压后的目录。
 6. 点击工具栏中的“题灵”图标，打开侧边栏。
 
-> 也可以从 GitHub Releases 下载未来的版本；当前首发版同时放在仓库 `release/` 目录中。
+> GitHub Releases 提供每个版本的 ZIP 与更新说明，页面：https://github.com/kingdome55/Quizora/releases
 
 ### 方式二：源码加载（开发）
 
 ```powershell
-git clone https://github.com/kingdome55/QuizPilot.git
+git clone https://github.com/kingdome55/Quizora.git
 ```
 
-> 仓库当前地址为 `QuizPilot`，计划更名为 `Quizora`；改名后 GitHub 会自动重定向旧地址。
+> 仓库地址：https://github.com/kingdome55/Quizora
 
 打开扩展管理页 → 开发人员模式 → 加载解压缩的扩展 → 选择仓库根目录（含 `manifest.json`）。
 
