@@ -89,9 +89,23 @@
     return parts.length === count ? parts : null;
   }
 
-  function fillBlanks(q, blanks) {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function freshInputs(q) {
+    try {
+      const list = A?.collectInputs?.(q.el, 'blank');
+      if (Array.isArray(list) && list.length) return list;
+    } catch {}
+    return q.inputs || [];
+  }
+
+  function inputValue(input) {
+    return norm(input.isContentEditable ? input.innerText : input.value);
+  }
+
+  async function fillBlanks(q, blanks) {
     if (!blanks.length) return { ok: false, complete: false };
-    const inputs = q.inputs;
+    let inputs = freshInputs(q);
     if (!inputs.length) {
       if (q.textarea || q.iframe || q.editable) {
         return { ok: fillEditor(q, blanks.join(' ')), complete: true };
@@ -104,17 +118,35 @@
       if (split) list = split;
     }
     const count = Math.min(inputs.length, list.length);
-    let written = 0;
-    for (let i = 0; i < count; i += 1) {
-      const input = inputs[i];
+    const writeAt = (i) => {
+      const current = freshInputs(q);
+      const input = current[i];
+      if (!input) return false;
       input.scrollIntoView({ block: 'center', inline: 'center' });
       input.focus();
       setNativeValue(input, list[i]);
-      const value = norm(input.isContentEditable ? input.innerText : input.value);
-      if (value) written += 1;
       input.blur();
+      return true;
+    };
+
+    for (let i = 0; i < count; i += 1) writeAt(i);
+
+    // 页面可能在输入后重新渲染输入框，重新查询并补写一次
+    await sleep(160);
+    let current = freshInputs(q);
+    const missing = [];
+    for (let i = 0; i < count; i += 1) {
+      if (!inputValue(current[i] || {})) missing.push(i);
     }
-    return { ok: written > 0, complete: written === inputs.length };
+    for (const i of missing) writeAt(i);
+    if (missing.length) await sleep(120);
+
+    current = freshInputs(q);
+    let written = 0;
+    for (let i = 0; i < Math.min(current.length, list.length); i += 1) {
+      if (inputValue(current[i])) written += 1;
+    }
+    return { ok: written > 0, complete: written === current.length };
   }
 
   function escapeHtml(text) {

@@ -7,7 +7,7 @@
 <p align="center">在已打开的答题页面上自动识别整卷题目、调用大模型判题并填写答案 —— 不自动交卷。</p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-0.5.4-6D28D9" />
+  <img alt="version" src="https://img.shields.io/badge/version-0.5.5-6D28D9" />
   <img alt="manifest" src="https://img.shields.io/badge/Manifest-V3-2563EB" />
   <img alt="platform" src="https://img.shields.io/badge/Edge%20%7C%20Chrome-Side%20Panel-10B981" />
   <img alt="license" src="https://img.shields.io/badge/license-MIT-10B981" />
@@ -17,7 +17,7 @@
 
 ![侧边栏：识别 11 题](docs/images/screenshot-panel.png)
 
-> 截图为 0.5.2 学习通混合卷实测：识别 11 题（单选×5 / 多选×5 / 简答×1），完成 10 道客观题。0.5.4 已修复多空填空分配与已答误判；简答题写入仍待真机复测。
+> 截图为 0.5.2 学习通混合卷实测：识别 11 题（单选×5 / 多选×5 / 简答×1），完成 10 道客观题。0.5.5 修复了缓存误命中、旧 DOM 写入与多任务点漏答；简答题写入仍待真机复测。
 
 ## 简介
 
@@ -61,7 +61,7 @@
 
 ### 方式一：使用发布包（推荐）
 
-1. 下载安装包：[`release/quizora-v0.5.4.zip`](release/quizora-v0.5.4.zip)。
+1. 下载安装包：[`release/quizora-v0.5.5.zip`](release/quizora-v0.5.5.zip)。
 2. **完整解压**到一个固定目录，例如 `D:\Quizora\`。解压后该目录里应直接看到 `manifest.json`。
 3. 打开 `edge://extensions`（Chrome 为 `chrome://extensions`）。
 4. 打开右上角“开发人员模式”。
@@ -117,7 +117,7 @@ A：不会。扩展只填写，提交由你手动完成。
 A：先看状态是“未获取到页面信息”还是“识别到 0 道题”。前者是内容脚本未响应（重载扩展后需刷新页面）；后者看探测面板的“容器命中 / typeName / 各 frame”诊断。
 
 **Q：学习通简答题写不进去？**  
-A：0.5.2 真机在最后一题报 `Illegal invocation`，0.5.3/0.5.4 已做跨 frame 修复，待真机复测。若仍失败，日志会显示 `第 N 题写入异常：…`。
+A：0.5.2 真机在最后一题报 `Illegal invocation`，0.5.3–0.5.5 已做跨 frame 修复，待真机复测。若仍失败，日志会显示 `第 N 题写入异常：…`。
 
 **Q：题干出现“庝/庡/庤”乱码？**  
 A：学习通字体反爬导致 `innerText` 拿到替换字符。识别不受影响，但会影响判题准确率，目前未解决。
@@ -157,7 +157,7 @@ release/                 发布包（ZIP）
 Get-ChildItem -Recurse -File -Filter *.js | ForEach-Object { node --check $_.FullName }
 Get-Content manifest.json -Raw | ConvertFrom-Json | Out-Null
 
-# 生产构建（生成 dist/ 与 release/quizora-v0.5.4.zip）
+# 生产构建（生成 dist/ 与 release/quizora-v0.5.5.zip）
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 

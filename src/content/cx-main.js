@@ -182,13 +182,16 @@
   }
 
   async function solve(q, images) {
-    if (settings.useCache !== false && q.type !== 'short') {
+    if (settings.useCache !== false && q.type !== 'short' && q.type !== 'blank') {
       const cached = await send({ type: 'GET_CACHE', hash: q.key });
-      const answer = cached?.entry?.answer;
-      if (answer?.blanks?.length && q.type === 'blank') {
-        return { ok: true, type: 'blank', blanks: answer.blanks, source: 'cache' };
-      }
-      if (answer?.indices?.length && q.type !== 'blank') {
+      const entry = cached?.entry;
+      const answer = entry?.answer;
+      const sameQuestion =
+        entry &&
+        entry.question === q.stem &&
+        entry.type === q.type &&
+        (q.type !== 'blank' || Number(entry.blankCount) === q.blankCount);
+      if (sameQuestion && answer?.indices?.length && q.type !== 'blank') {
         return { ok: true, type: q.type, indices: answer.indices, source: 'cache' };
       }
     }
@@ -250,7 +253,7 @@
 
     try {
       if (q.type === 'blank') {
-        const res = F.fillBlanks(q, ans.blanks || []);
+        const res = await F.fillBlanks(q, ans.blanks || []);
         ok = res.ok;
         if (!res.complete) note = '部分空未填';
       } else if (q.type === 'short') {

@@ -38,7 +38,7 @@ body:
     id: version
     attributes:
       label: 题灵版本
-      placeholder: 例如 0.5.4（见 manifest.json 或扩展管理页）
+      placeholder: 例如 0.5.5（见 manifest.json 或扩展管理页）
     validations:
       required: true
   - type: input

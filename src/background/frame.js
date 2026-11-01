@@ -159,6 +159,63 @@ export async function pickFrame(tab, files) {
   return { frameId: fallback?.frameId ?? 0, snapshot, count: 0, usable: false, injection };
 }
 
+export async function pickFrames(tab, files) {
+  let probes = await probeAll(tab);
+  let injection = null;
+
+  if (!probes.some((p) => usable(p.snapshot))) {
+    injection = await injectFiles(tab, files);
+    probes = await probeAll(tab);
+  }
+
+  const responded = probes.filter((p) => p.snapshot);
+  const ranked = responded
+    .filter((p) => usable(p.snapshot))
+    .sort((a, b) => weight(b.snapshot) - weight(a.snapshot) || (b.depth || 0) - (a.depth || 0));
+  const summary = frameSummary(probes);
+  const frames = ranked.slice(0, 8).map((p) => ({
+    frameId: p.frameId,
+    depth: p.depth || 0,
+    count: p.snapshot.count || 0,
+    snapshot: p.snapshot
+  }));
+
+  const chosen = new Set(frames.map((f) => f.frameId));
+  for (const p of probes) {
+    if (chosen.has(p.frameId)) continue;
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id, frameIds: [p.frameId] },
+        func: () => document.getElementById('__wg_hud')?.remove()
+      });
+    } catch {}
+  }
+
+  if (frames.length) {
+    cache.set(tab.id, { url: tab.url, frameId: frames[0].frameId });
+    for (const f of frames) f.snapshot.frames = summary;
+    return {
+      frames,
+      snapshot: frames[0].snapshot,
+      count: frames[0].count,
+      usable: true,
+      injection,
+      probes: summary
+    };
+  }
+
+  const fallback = responded
+    .slice()
+    .sort((a, b) => evidence(b.snapshot) - evidence(a.snapshot) || (b.depth || 0) - (a.depth || 0))[0];
+  let snapshot = fallback?.snapshot || null;
+  if (snapshot) {
+    snapshot.frames = summary;
+    snapshot.injection = injection;
+  }
+  cache.delete(tab.id);
+  return { frames: [], snapshot, count: 0, usable: false, injection, probes: summary };
+}
+
 export function clearFrame(tabId) {
   cache.delete(tabId);
 }

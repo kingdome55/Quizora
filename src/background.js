@@ -2,7 +2,7 @@ import { getConfig, saveConfig } from './background/config.js';
 import { getCached, putCached, cacheStats, clearCache } from './background/cache.js';
 import { askLLM, askExam } from './background/llm.js';
 import { siteForUrl, isReadOnlyUrl } from './background/sites.js';
-import { pickFrame, clearFrame } from './background/frame.js';
+import { pickFrame, pickFrames, clearFrame } from './background/frame.js';
 
 const ports = new Set();
 const history = [];
@@ -105,24 +105,62 @@ async function startRun(tabIdArg) {
   if (run.running) await stopRun();
   pushLog('info', '正在启动…');
   try {
-    const picked = await pickFrame(tab, site.files);
-    if (!picked.usable) {
+    const multi = site.id === 'chaoxing';
+    const picked = multi ? await pickFrames(tab, site.files) : await pickFrame(tab, site.files);
+    const targets = multi
+      ? picked.frames || []
+      : picked.usable
+        ? [{ frameId: picked.frameId, count: picked.count, snapshot: picked.snapshot }]
+        : [];
+
+    if (!targets.length) {
       logInjection(picked.injection);
       await logSelfCheck(tab);
       resetRun('未识别到题目', 'error');
       return { ok: false, error: '未识别到题目，请先点“探测当前页”查看诊断' };
     }
+
     const { apiKey, ...settings } = await getConfig();
-    settings.mode = /\/exam\b/i.test(new URL(tab.url).pathname) ? 'exam' : 'work';
-    await chrome.tabs.sendMessage(
-      tab.id,
-      { type: 'WG_START', settings, site: site.id },
-      { frameId: picked.frameId }
-    );
-    run = { tabId: tab.id, frameId: picked.frameId, running: true, site: site.id };
-    lastState = { status: '运行中', detail: `${site.label} · 已注入`, tone: 'work', site: site.id };
-    pushLog('ok', `已启动（${site.label}）：${tab.url.slice(0, 80)}`);
-    return { ok: true, tabId: tab.id, site: site.id, siteLabel: site.label };
+    pushLog('info', `任务点分布：${targets.map((f, i) => `#${i + 1} ${f.count}题`).join('，')}`);
+    const started = [];
+    for (let i = 0; i < targets.length; i += 1) {
+      const target = targets[i];
+      const mode = /\/exam\b/i.test(new URL(target.snapshot?.url || tab.url).pathname) ? 'exam' : 'work';
+      try {
+        await chrome.tabs.sendMessage(
+          tab.id,
+          { type: 'WG_START', settings: { ...settings, mode }, site: site.id },
+          { frameId: target.frameId }
+        );
+        started.push({ ...target, mode });
+      } catch (e) {
+        pushLog('warn', `任务点 ${i + 1} 启动失败：${String(e?.message || e).slice(0, 120)}`);
+      }
+    }
+
+    if (!started.length) {
+      resetRun('启动失败', 'error');
+      return { ok: false, error: '所有任务点都启动失败，请刷新页面后重试' };
+    }
+
+    run = {
+      tabId: tab.id,
+      running: true,
+      site: site.id,
+      frames: new Map(started.map((f, i) => [f.frameId, { label: `任务点${i + 1}`, count: f.count }])),
+      totalFrames: started.length,
+      anyFilled: false,
+      anyDone: false
+    };
+    const totalCount = started.reduce((sum, f) => sum + (f.count || 0), 0);
+    lastState = {
+      status: '运行中',
+      detail: `${site.label} · ${started.length} 个任务点`,
+      tone: 'work',
+      site: site.id
+    };
+    pushLog('ok', `已启动（${site.label}）：${started.length} 个任务点，共 ${totalCount} 题`);
+    return { ok: true, tabId: tab.id, site: site.id, siteLabel: site.label, frames: started.length };
   } catch (e) {
     clearFrame(tab.id);
     resetRun('启动失败', 'error');
@@ -243,7 +281,7 @@ async function testVision() {
   }
 }
 
-async function handle(msg) {
+async function handle(msg, sender) {
   switch (msg?.type) {
     case 'GET_STATE': {
       return {
@@ -311,27 +349,63 @@ async function handle(msg) {
       if (res.ok && msg.hash && payload.type !== 'short') {
         await putCached(msg.hash, {
           answer: { indices: res.indices || [], blanks: res.blanks || [] },
+          question: payload.question || '',
+          type: payload.type || '',
+          blankCount: payload.blankCount || 0,
           confidence: res.confidence,
           reason: res.reason
         });
       }
       return res;
     }
-    case 'WG_LOG':
-      pushLog(msg.level || 'info', msg.text || '');
+    case 'WG_LOG': {
+      const tag = run.totalFrames > 1 ? run.frames?.get?.(sender?.frameId)?.label : '';
+      pushLog(msg.level || 'info', tag ? `[${tag}] ${msg.text || ''}` : msg.text || '');
       return { ok: true };
+    }
     case 'WG_STATE':
       lastState = msg.state || lastState;
       broadcast({ type: 'STATE', state: lastState });
       return { ok: true };
     case 'WG_STOPPED': {
+      if (!run.running) return { ok: true };
+      if (msg.reason === 'stop') {
+        for (const frameId of run.frames?.keys?.() || []) {
+          try {
+            await chrome.tabs.sendMessage(run.tabId, { type: 'WG_STOP' }, { frameId });
+          } catch {}
+        }
+        run.frames?.clear?.();
+        run.running = false;
+        lastState = { status: '已停止', detail: '已手动停止', tone: 'idle', site: run.site || lastState.site };
+        broadcast({ type: 'STATE', state: lastState });
+        return { ok: true };
+      }
+      const frameInfo = run.frames?.get?.(sender?.frameId);
+      if (!frameInfo) return { ok: true };
+      run.frames.delete(sender.frameId);
+      if (msg.reason === 'filled' || msg.reason === 'done') run.anyFilled = true;
+      if (msg.reason === 'done') run.anyDone = true;
+
+      const remaining = run.frames.size;
+      if (remaining > 0) {
+        lastState = {
+          status: '运行中',
+          detail: `剩余 ${remaining} 个任务点`,
+          tone: 'work',
+          site: run.site || lastState.site
+        };
+        broadcast({ type: 'STATE', state: lastState });
+        return { ok: true };
+      }
+
       run.running = false;
-      const done = msg.reason === 'done';
-      const filled = msg.reason === 'filled';
-      const notfound = msg.reason === 'notfound';
+      const done = run.anyDone;
+      const filled = run.anyFilled;
+      const notfound = !done && !filled && msg.reason === 'notfound';
       lastState = {
         status: done ? '已完成' : filled ? '已填完' : notfound ? '未识别到题目' : '已停止',
-        detail: notfound ? lastState.detail || '' : msg.reason || '',
+        detail: notfound ? lastState.detail || '' : `${run.totalFrames || 1} 个任务点`,
         tone: done || filled ? 'ok' : notfound ? 'error' : 'idle',
         site: run.site || lastState.site
       };

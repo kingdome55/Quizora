@@ -544,5 +544,5 @@
     }
     return snap;
   }
-  NS.cxAdapter = { scan, snapshot, isAnswered, isSelected };
+  NS.cxAdapter = { scan, snapshot, isAnswered, isSelected, collectInputs };
 })();
