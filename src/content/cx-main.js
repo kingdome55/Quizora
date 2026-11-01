@@ -17,6 +17,7 @@
   const DONE_KEY = `wg_exam_done_v1:${location.origin}${location.pathname}${location.search}`;
   let doneKeys = new Set();
   let doneLoaded = false;
+  const processed = new Set();
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const rand = (min, max) => Math.floor(min + Math.random() * Math.max(1, max - min));
   async function ensureDone() {
@@ -97,6 +98,7 @@
     skipped = 0;
     failed = [];
     lastReport = '';
+    processed.clear();
     F.clearMarks();
 
     H.ensure();
@@ -142,11 +144,18 @@
           if (q.type === 'unknown') {
             failed.push(q.index + 1);
             F.mark(q, 'fail', '无法识别题型');
+            processed.add(q.key);
             continue;
           }
           if (!q.options.length && !q.inputs.length && !q.textarea && !q.iframe && !q.editable) {
             failed.push(q.index + 1);
             F.mark(q, 'fail', '无可用输入控件');
+            processed.add(q.key);
+            continue;
+          }
+          if (processed.has(q.key)) {
+            skipped += 1;
+            F.mark(q, 'skip', '本次已处理');
             continue;
           }
           const answered = q.answered;
@@ -154,6 +163,7 @@
             skipped += 1;
             F.mark(q, 'skip', '已有答案');
             doneKeys.add(q.key);
+            processed.add(q.key);
             continue;
           }
 
@@ -166,6 +176,7 @@
             } catch {}
             log('error', `第 ${q.index + 1} 题异常：${e?.message || e}`);
           }
+          processed.add(q.key);
           acted = true;
         }
 
@@ -182,16 +193,17 @@
   }
 
   async function solve(q, images) {
-    if (settings.useCache !== false && q.type !== 'short' && q.type !== 'blank') {
+    if (settings.useCache !== false && q.type !== 'short') {
       const cached = await send({ type: 'GET_CACHE', hash: q.key });
       const entry = cached?.entry;
       const answer = entry?.answer;
-      const sameQuestion =
-        entry &&
-        entry.question === q.stem &&
-        entry.type === q.type &&
-        (q.type !== 'blank' || Number(entry.blankCount) === q.blankCount);
-      if (sameQuestion && answer?.indices?.length && q.type !== 'blank') {
+      const sameQuestion = entry && entry.question === q.stem && entry.type === q.type;
+      if (q.type === 'blank') {
+        const blanks = answer?.blanks;
+        if (sameQuestion && Number(entry.blankCount) === q.blankCount && Array.isArray(blanks) && blanks.length === q.blankCount) {
+          return { ok: true, type: 'blank', blanks, source: 'cache' };
+        }
+      } else if (sameQuestion && answer?.indices?.length) {
         return { ok: true, type: q.type, indices: answer.indices, source: 'cache' };
       }
     }

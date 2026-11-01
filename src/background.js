@@ -94,6 +94,13 @@ async function logSelfCheck(tab) {
   return rows;
 }
 
+function logBlankDetails(snapshot, tag = '') {
+  for (const b of snapshot?.blankDetails || []) {
+    const extra = b.cells ? ` / 空框 ${b.cells}` : '';
+    pushLog('info', `${tag}填空 #${b.index}：空格 ${b.blanks} / 输入框 ${b.inputs}${extra}`);
+  }
+}
+
 async function startRun(tabIdArg) {
   const tab = await resolveTab(tabIdArg);
   if (!tab) return { ok: false, error: '找不到活动标签页' };
@@ -122,6 +129,9 @@ async function startRun(tabIdArg) {
 
     const { apiKey, ...settings } = await getConfig();
     pushLog('info', `任务点分布：${targets.map((f, i) => `#${i + 1} ${f.count}题`).join('，')}`);
+    for (let i = 0; i < targets.length; i += 1) {
+      logBlankDetails(targets[i].snapshot, targets.length > 1 ? `[任务点${i + 1}] ` : '');
+    }
     const started = [];
     for (let i = 0; i < targets.length; i += 1) {
       const target = targets[i];
@@ -210,6 +220,7 @@ async function probe(tabIdArg) {
         } catch {}
       }
     }
+    logBlankDetails(picked.snapshot);
     return {
       ok: true,
       site: site.id,

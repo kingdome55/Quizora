@@ -428,25 +428,73 @@
       .map((img) => img.currentSrc || img.getAttribute('data-src') || img.getAttribute('data-original') || img.src)
       .filter(Boolean);
   }
+  function countBlankSlots(text) {
+    const runs = String(text || '').match(/[_＿]{2,}/g);
+    return runs ? runs.length : 0;
+  }
+  function expandBlankScope(el, need) {
+    if (need <= 1) return el;
+    let scope = el;
+    let best = el;
+    let bestCount = collectInputs(el, 'blank').length;
+    for (let up = 0; up < 3; up += 1) {
+      const parent = scope.parentElement;
+      if (!parent) break;
+      let otherQuestion = false;
+      for (const sib of parent.children) {
+        if (sib === scope) continue;
+        if (/TiMu|questionLi|question-item|questionItem|work-question|mark_item/i.test(String(sib.className || ''))) {
+          otherQuestion = true;
+          break;
+        }
+      }
+      if (otherQuestion) break;
+      const count = collectInputs(parent, 'blank').length;
+      if (count === need) return parent;
+      if (count > need) break;
+      if (count > bestCount) {
+        best = parent;
+        bestCount = count;
+      }
+      scope = parent;
+    }
+    return best;
+  }
+  function findBlankCells(scope) {
+    const nodes = [...scope.querySelectorAll('li, div, span')].filter(isVisible);
+    const cells = nodes.filter((n) => {
+      const text = norm(n.innerText);
+      if (!/^第?\s*\d+\s*空/.test(text)) return false;
+      if (n.querySelector('input, textarea, [contenteditable="true"]')) return false;
+      if (n.children.length > 4) return false;
+      return true;
+    });
+    return cells.filter((el) => !cells.some((other) => other !== el && el.contains(other))).slice(0, 8);
+  }
   function buildQuestion(el, index) {
     const choicePreview = collectChoice(el);
     const type = detectType(el, choicePreview);
     const options = ['single', 'multiple', 'judge'].includes(type) ? choicePreview : [];
-    const inputs = collectInputs(el, type);
-    const { textarea, iframe, editable } = collectEditor(el, type);
     const stem = findStem(el);
+    const slots = type === 'blank' ? countBlankSlots(stem) : 0;
+    const scope = type === 'blank' ? expandBlankScope(el, slots) : el;
+    const inputs = collectInputs(scope, type);
+    const { textarea, iframe, editable } = collectEditor(scope, type);
+    const blankCells = type === 'blank' && slots > inputs.length ? findBlankCells(scope) : [];
     const q = {
       index,
       el,
+      scope,
       type,
       stem,
       options,
       inputs,
+      blankCells,
       textarea,
       iframe,
       editable,
       images: collectImages(el),
-      blankCount: inputs.length || (textarea || iframe || editable ? 1 : 0),
+      blankCount: type === 'blank' ? Math.max(inputs.length, slots) : inputs.length || (textarea || iframe || editable ? 1 : 0),
       answered: false
     };
     q.answered = isAnswered(q);
@@ -535,6 +583,15 @@
         answered: q.answered
       }))
     };
+    snap.blankDetails = res.questions
+      .filter((q) => q.type === 'blank')
+      .map((q) => ({
+        index: q.index + 1,
+        stem: q.stem.slice(0, 90),
+        blanks: q.blankCount,
+        inputs: q.inputs.length,
+        cells: q.blankCells?.length || 0
+      }));
     if (!res.count) {
       let diagnostics = null;
       try {

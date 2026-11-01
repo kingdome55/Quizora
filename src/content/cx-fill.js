@@ -93,7 +93,7 @@
 
   function freshInputs(q) {
     try {
-      const list = A?.collectInputs?.(q.el, 'blank');
+      const list = A?.collectInputs?.(q.scope || q.el, 'blank');
       if (Array.isArray(list) && list.length) return list;
     } catch {}
     return q.inputs || [];
@@ -117,6 +117,11 @@
       const split = splitCombinedBlanks(list[0], inputs.length);
       if (split) list = split;
     }
+    if (inputs.length < list.length && q.blankCells?.length) {
+      for (const cell of q.blankCells) clickBox(cell);
+      await sleep(80);
+      inputs = freshInputs(q);
+    }
     const count = Math.min(inputs.length, list.length);
     const writeAt = (i) => {
       const current = freshInputs(q);
@@ -132,14 +137,14 @@
     for (let i = 0; i < count; i += 1) writeAt(i);
 
     // 页面可能在输入后重新渲染输入框，重新查询并补写一次
-    await sleep(160);
+    await sleep(100);
     let current = freshInputs(q);
     const missing = [];
     for (let i = 0; i < count; i += 1) {
       if (!inputValue(current[i] || {})) missing.push(i);
     }
     for (const i of missing) writeAt(i);
-    if (missing.length) await sleep(120);
+    if (missing.length) await sleep(80);
 
     current = freshInputs(q);
     let written = 0;
