@@ -2,7 +2,10 @@
   if (window.__wg?.cxAdapter) return;
   const NS = (window.__wg = window.__wg || {});
   const HUD_ID = '__wg_hud';
-  const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const norm = (s) => {
+    const text = String(s || '').replace(/\s+/g, ' ').trim();
+    return NS.cxFont?.decrypt ? NS.cxFont.decrypt(text) : text;
+  };
   function isVisible(el) {
     if (!el || !el.isConnected) return false;
     const rect = el.getBoundingClientRect();
@@ -307,7 +310,10 @@
   function collectDivChoice(el) {
     const boxes = [...el.querySelectorAll(
       '.answerBg, [class*="answerBg"], [class*="answerItem"], [class*="optionItem"], .Zy_ul li, .Zy_ulTop li, [class*="Zy_ul"] li'
-    )].filter(isVisible).filter((b, i, arr) => !arr.some((o) => o !== b && b.contains(o)));
+    )]
+      .filter(isVisible)
+      .filter((b) => !b.closest('.XztiHover1, .Zy_ulTk, .Cy_ulTk, [class*="Zy_ulTk"], [class*="Cy_ulTk"]'))
+      .filter((b, i, arr) => !arr.some((o) => o !== b && b.contains(o)));
     if (!boxes.length) return NS.cxPlain?.collect?.(el) || [];
     const seen = new Set();
     return boxes.reduce((out, box) => {
@@ -391,10 +397,32 @@
       (attr) => el.getAttribute(attr) === 'true'
     );
   }
+  function blankCellValue(cell) {
+    if (!cell) return '';
+    const input =
+      cell.querySelector('input.inp') ||
+      [...cell.querySelectorAll('input')].find((n) => {
+        const t = (n.getAttribute('type') || 'text').toLowerCase();
+        return !['radio', 'checkbox', 'hidden', 'button', 'submit', 'file', 'image'].includes(t) && !n.disabled;
+      });
+    if (input) return norm(input.value);
+    const ta = cell.querySelector('textarea');
+    if (ta && norm(ta.value)) return norm(ta.value);
+    const iframe = cell.querySelector('iframe');
+    try {
+      const body = iframe?.contentDocument?.body;
+      if (body) return norm(body.innerText);
+    } catch {}
+    return '';
+  }
   function isAnswered(q) {
     if (q.options?.length) {
       const n = q.options.filter((o) => isSelected(o)).length;
       if (q.type === 'multiple' ? n > 0 && n < q.options.length : n === 1) return true;
+    }
+    if (q.blankCells?.length) {
+      const values = q.blankCells.map(blankCellValue);
+      if (values.every((v) => v && !/^请输入/.test(v))) return true;
     }
     if (q.inputs?.length) {
       const values = q.inputs.map((i) => norm(i.isContentEditable ? i.innerText : i.value));
@@ -460,16 +488,48 @@
     }
     return best;
   }
-  function findBlankCells(scope) {
-    const nodes = [...scope.querySelectorAll('li, div, span')].filter(isVisible);
-    const cells = nodes.filter((n) => {
+  function findBlankCells(scope, el) {
+    // 成熟实现（cxmooc-tools）中，学习通填空答案格是 .XztiHover1；
+    // 左侧 span.tiankong 只是“第X空”标签，真正控件在格内：input.inp 或 UEditor。
+    const cells = [];
+    const add = (root) => {
+      if (!root) return;
+      for (const cell of root.querySelectorAll('.XztiHover1')) {
+        if (!cells.includes(cell)) cells.push(cell);
+      }
+    };
+    add(scope);
+    if (el && el !== scope) add(el);
+
+    const holder = el?.closest?.(
+      '.TiMu, .questionLi, [class*="questionLi"], .question-item, .questionItem, .exam-question'
+    );
+    if (holder) {
+      for (const box of holder.querySelectorAll('.Zy_ulTk, .Cy_ulTk, [class*="Zy_ulTk"], [class*="Cy_ulTk"]')) add(box);
+    }
+    if (cells.length) {
+      const scoped = holder ? cells.filter((cell) => holder.contains(cell)) : cells;
+      if (scoped.length) return scoped.slice(0, 8);
+    }
+
+    const nodes = [...scope.querySelectorAll('li, div, span, p, label, td, th, a')].filter(isVisible);
+    const labels = nodes.filter((n) => {
       const text = norm(n.innerText);
       if (!/^第?\s*\d+\s*空/.test(text)) return false;
       if (n.querySelector('input, textarea, [contenteditable="true"]')) return false;
       if (n.children.length > 4) return false;
       return true;
     });
-    return cells.filter((el) => !cells.some((other) => other !== el && el.contains(other))).slice(0, 8);
+    const leafLabels = labels.filter((e) => !labels.some((other) => other !== e && e.contains(other))).slice(0, 8);
+    // 兼容“第 N 空”标签紧跟答案格、但答案格 class 已改版的页面
+    if (leafLabels.length) {
+      const paired = leafLabels.map((label) => {
+        const sib = label.nextElementSibling;
+        return sib?.querySelector?.('input, textarea, iframe, [contenteditable="true"]') ? sib : null;
+      });
+      if (paired.every(Boolean)) return paired;
+    }
+    return leafLabels;
   }
   function buildQuestion(el, index) {
     const choicePreview = collectChoice(el);
@@ -480,7 +540,7 @@
     const scope = type === 'blank' ? expandBlankScope(el, slots) : el;
     const inputs = collectInputs(scope, type);
     const { textarea, iframe, editable } = collectEditor(scope, type);
-    const blankCells = type === 'blank' && slots > inputs.length ? findBlankCells(scope) : [];
+    const blankCells = type === 'blank' ? findBlankCells(scope, el) : [];
     const q = {
       index,
       el,
@@ -494,7 +554,9 @@
       iframe,
       editable,
       images: collectImages(el),
-      blankCount: type === 'blank' ? Math.max(inputs.length, slots) : inputs.length || (textarea || iframe || editable ? 1 : 0),
+      blankCount: type === 'blank'
+        ? Math.max(inputs.length, slots, blankCells.length)
+        : inputs.length || (textarea || iframe || editable ? 1 : 0),
       answered: false
     };
     q.answered = isAnswered(q);
@@ -591,7 +653,8 @@
         blanks: q.blankCount,
         inputs: q.inputs.length,
         cells: q.blankCells?.length || 0,
-        sample: String(q.blankCells?.[0]?.outerHTML || '').slice(0, 180)
+        sample: String(q.blankCells?.[0]?.outerHTML || '').slice(0, 180),
+        parent: String(q.blankCells?.[0]?.parentElement?.outerHTML || '').slice(0, 260)
       }));
     if (!res.count) {
       let diagnostics = null;

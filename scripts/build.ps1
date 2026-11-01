@@ -46,7 +46,9 @@ $required = @(
   'src/panel.css',
   'assets/icon16.png',
   'assets/icon48.png',
-  'assets/icon128.png'
+  'assets/icon128.png',
+  'src/vendor/typr-md5.js',
+  'src/vendor/cx-font-table.json'
 )
 foreach ($rel in $required) {
   if (-not (Test-Path (Join-Path $stage $rel))) { throw "构建缺少必需文件：$rel" }

@@ -1,6 +1,6 @@
 # 技术架构
 
-> 对应版本：0.5.8 · 所有路径相对 `wayground-auto/`
+> 对应版本：0.6.0 · 所有路径相对 `wayground-auto/`
 
 ## 1. 总体架构
 
@@ -21,14 +21,20 @@
 ┌─────────────▼───────────────────────────────────────────┐
 │ 页面内容脚本（隔离世界，共享 window.__wg 命名空间）        │
 │  Wayground：adapter → solver → main + hud                 │
-│  学习通/通用：cx-debug / cx-generic / cx-plain /          │
+│  学习通/通用：cx-font / cx-debug / cx-generic / cx-plain /│
 │               cx-adapter / cx-image / cx-fill / cx-main   │
+│  字体依赖：vendor/typr-md5.js + cx-font-table.json         │
 └─────────────┬───────────────────────────────────────────┘
               │ fetch（仅 background）
 ┌─────────────▼───────────────────────────────────────────┐
 │ OpenAI 兼容接口（默认 api.deepseek.com/v1）               │
 └──────────────────────────────────────────────────────────┘
 ```
+
+### 1.1 学习通 0.6.0 两条新链路
+
+- **字体解密（cx-font.js）**：页面 `<style>` 内嵌 `font-cxsecret` TTF → `Typr.parse` → 对 CJK 码位算 `glyphToPath` 的 MD5 → 查 `cx-font-table.json` → 构建“替换码位 → 真实码位”映射；`cx-adapter.norm()` 在文本进入模型前解密，并同步改写 `.font-cxsecret` 文本节点。
+- **填空写入（cx-fill.js）**：`.XztiHover1` 是答案格（左侧 `span.tiankong` 只是“第 N 空”标签）→ 格内 `input.inp` 用原生 setter 写入；UEditor 先写同源编辑 iframe，再通过 background `WG_UE_FILL` 在 MAIN world 调 `UE.getEditor(name).setContent()+sync()`。
 
 关键边界：
 

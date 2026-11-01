@@ -2,6 +2,39 @@
 
 本项目采用语义化版本。当前处于公开测试阶段（0.x），接口与行为仍可能调整。
 
+## [0.6.0] - 2026-11-01
+
+### Fixed
+
+- **填空题按学习通真实结构写入**：答案格是 `.XztiHover1`（不是左侧 `span.tiankong` 标签）。
+  - 格内优先写 `input.inp`；否则找 `textarea[name]` 对应的 UEditor：先写编辑 iframe，再通过 `chrome.scripting` 在 MAIN world 调用 `UE.getEditor(name).setContent()` + `sync()`。
+  - 支持 `.Zy_ulTk`（作业）与 `.Cy_ulTk`（考试）两种容器；按“第 N 空”标签排序，不再依赖页面暴露的可见输入框数量。
+  - 答案格内的值也纳入“已作答”判断，避免已完成填空被重复作答。
+- **学习通字体反爬解密**：识别 `style` 中的 `font-cxsecret` 内嵌 TTF，使用 Typr.js 解析字形路径、MD5 查映射表，把题干/选项中的替换字还原为真实汉字。
+  - 在扫描前完成解密；探测与启动都会等待字库就绪。
+  - 日志输出“字体解密已就绪：N 个字形”，未命中时自动回退原文。
+- 选择题选项收集排除 `.XztiHover1` / `.Zy_ulTk` / `.Cy_ulTk` 内的填空格，避免填空题被误判为选择题。
+
+### Changed
+
+- 新增 `src/vendor/typr-md5.js`、`src/vendor/cx-font-table.json`（MIT，见 README“第三方组件”）。
+- `manifest.json` 增加 `web_accessible_resources` 以按需加载字形映射表。
+
+### Tested
+
+- 本地 mock 覆盖 7 组：旧版“span 标签 + 同级可编辑框”、`.XztiHover1 + input.inp`、`.XztiHover1 + UEditor iframe`、input/UEditor 混合、双题作用域隔离与 `isAnswered`、答案格 class 改版（标签后紧跟含控件的格）、答案数少于格子数（`complete=false`），均通过。
+
+## [0.5.9] - 2026-11-01
+
+### Fixed
+
+- 真实页面的空框是 `span` 标签（`role=option`），不是答案框；填充改为点击标签后：
+  - 检测页面全局新生成的 input/textarea/可编辑区；
+  - 检查标签父级内的输入控件；
+  - 查找同级答案框并直写；
+  - 匹配父级选项列表中的答案文本并点击。
+- 空框扫描范围扩展 `p/label/td/th/a`，并输出“空框父级”HTML，便于按真实结构适配。
+
 ## [0.5.8] - 2026-11-01
 
 ### Fixed

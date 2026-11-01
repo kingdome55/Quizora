@@ -7,7 +7,7 @@
 <p align="center">在已打开的答题页面上自动识别整卷题目、调用大模型判题并填写答案 —— 不自动交卷。</p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-0.5.8-6D28D9" />
+  <img alt="version" src="https://img.shields.io/badge/version-0.6.0-6D28D9" />
   <img alt="manifest" src="https://img.shields.io/badge/Manifest-V3-2563EB" />
   <img alt="platform" src="https://img.shields.io/badge/Edge%20%7C%20Chrome-Side%20Panel-10B981" />
   <img alt="license" src="https://img.shields.io/badge/license-MIT-10B981" />
@@ -17,7 +17,7 @@
 
 ![侧边栏：识别 11 题](docs/images/screenshot-panel.png)
 
-> 截图为 0.5.2 学习通混合卷实测：识别 11 题（单选×5 / 多选×5 / 简答×1），完成 10 道客观题。0.5.8 修复了空框点击路径的运行时错误，并对无法激活的占位框提供“空框直写”回退；简答题写入仍待真机复测。
+> 截图为 0.5.2 学习通混合卷实测：识别 11 题（单选×5 / 多选×5 / 简答×1），完成 10 道客观题。0.6.0 改为按学习通真实填空结构 `.XztiHover1`（格内 `input.inp` / UEditor）定位并写入，同时内置 `font-cxsecret` 字体解密。
 
 ## 简介
 
@@ -61,7 +61,7 @@
 
 ### 方式一：使用发布包（推荐）
 
-1. 下载安装包：[`release/quizora-v0.5.8.zip`](release/quizora-v0.5.8.zip)。
+1. 下载安装包：[`release/quizora-v0.6.0.zip`](release/quizora-v0.6.0.zip)。
 2. **完整解压**到一个固定目录，例如 `D:\Quizora\`。解压后该目录里应直接看到 `manifest.json`。
 3. 打开 `edge://extensions`（Chrome 为 `chrome://extensions`）。
 4. 打开右上角“开发人员模式”。
@@ -117,10 +117,10 @@ A：不会。扩展只填写，提交由你手动完成。
 A：先看状态是“未获取到页面信息”还是“识别到 0 道题”。前者是内容脚本未响应（重载扩展后需刷新页面）；后者看探测面板的“容器命中 / typeName / 各 frame”诊断。
 
 **Q：学习通简答题写不进去？**  
-A：0.5.2 真机在最后一题报 `Illegal invocation`，0.5.3–0.5.8 已做跨 frame 修复，待真机复测。若仍失败，日志会显示 `第 N 题写入异常：…`。
+A：0.5.2 真机在最后一题报 `Illegal invocation`，0.5.3–0.6.0 已做跨 frame 修复，待真机复测。若仍失败，日志会显示 `第 N 题写入异常：…`。
 
 **Q：题干出现“庝/庡/庤”乱码？**  
-A：学习通字体反爬导致 `innerText` 拿到替换字符。识别不受影响，但会影响判题准确率，目前未解决。
+A：学习通 `font-cxsecret` 字体反爬。0.6.0 内置 Typr.js + 字形映射表，在扫描前解密题干与选项；日志出现“字体解密已就绪：N 个字形”即表示生效。若映射表未命中，会保留原文，不影响其他功能。
 
 **Q：可以用于正式考试吗？**  
 A：不建议。自动答题可能违反平台规则，账号与成绩风险由使用者承担。项目不做风控规避，也不自动提交。
@@ -131,7 +131,7 @@ A：Key 仅存本机扩展存储，明文保存；不要在共用电脑上使用
 ## 技术栈
 
 - Manifest V3（Service Worker + Side Panel + Content Scripts）
-- 原生 JavaScript / HTML / CSS，**零第三方依赖、零构建依赖**
+- 原生 JavaScript / HTML / CSS，**无框架、零构建依赖**；仅内置字体解析所需的最小第三方库（见“第三方组件”）
 - OpenAI 兼容 Chat Completions 接口（支持 `image_url` 多模态）
 - `chrome.scripting`、`chrome.webNavigation`、`chrome.storage.local`
 
@@ -142,7 +142,8 @@ manifest.json            扩展声明（图标、权限、学习通静态内容�
 assets/                  品牌图标 16/48/128 与 1024 源图
 src/background.js        Service Worker：路由、注入、运行态、自检
 src/background/          配置、缓存、LLM、站点注册、frame 选择
-src/content/             Wayground 单题链路 + 学习通/通用整卷链路
+src/content/             Wayground 单题链路 + 学习通/通用整卷链路 + 字体解密
+src/vendor/              Typr.js / md5 / 学习通字形映射表（第三方，见下）
 src/panel.*              侧边栏控制台
 docs/                    架构、踩坑、决策、测试、遗留问题
 docs/archive/            早期方案原文（历史资料）
@@ -157,7 +158,7 @@ release/                 发布包（ZIP）
 Get-ChildItem -Recurse -File -Filter *.js | ForEach-Object { node --check $_.FullName }
 Get-Content manifest.json -Raw | ConvertFrom-Json | Out-Null
 
-# 生产构建（生成 dist/ 与 release/quizora-v0.5.8.zip）
+# 生产构建（生成 dist/ 与 release/quizora-v0.6.0.zip）
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
@@ -179,6 +180,17 @@ powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ## 开源协议
 
 本项目采用 [MIT License](LICENSE)。你可以自由使用、修改与分发，但需保留版权与许可声明。
+
+### 第三方组件
+
+学习通字体解密参考并内置了以下 MIT 许可组件/数据：
+
+- [Typr.js](https://github.com/photopea/Typr.js)（字体解析，MIT）
+- [blueimp-md5](https://github.com/blueimp/JavaScript-MD5)（MD5，MIT）
+- 字形映射表 `cx-font-table.json`（作者 wyn665817，MIT；与 [OCSJS](https://github.com/ocsjs/ocsjs) 使用的 `table.json` 相同）
+- 解密思路参考 [超星字体解密](https://scriptcat.org/zh-CN/script-show-page/432)（MIT）与 [OCSJS](https://github.com/ocsjs/ocsjs)
+
+填空结构参考 [cxmooc-tools](https://github.com/CodFrm/cxmooc-tools)：答案格 `.XztiHover1`，格内为 `input.inp` 或 UEditor。
 
 ## 免责声明
 

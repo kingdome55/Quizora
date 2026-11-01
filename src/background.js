@@ -99,6 +99,7 @@ function logBlankDetails(snapshot, tag = '') {
     const extra = b.cells ? ` / 空框 ${b.cells}` : '';
     pushLog('info', `${tag}填空 #${b.index}：空格 ${b.blanks} / 输入框 ${b.inputs}${extra}`);
     if (b.sample) pushLog('info', `${tag}空框样本：${b.sample}`);
+    if (b.parent) pushLog('info', `${tag}空框父级：${b.parent}`);
   }
 }
 
@@ -369,6 +370,40 @@ async function handle(msg, sender) {
         });
       }
       return res;
+    }
+    case 'WG_FONT_TABLE': {
+      try {
+        const res = await fetch(chrome.runtime.getURL('src/vendor/cx-font-table.json'));
+        return { ok: true, table: await res.json() };
+      } catch (e) {
+        return { ok: false, error: String(e?.message || e) };
+      }
+    }
+    case 'WG_UE_FILL': {
+      const tabId = sender?.tab?.id;
+      if (!tabId || !msg.name) return { ok: false, error: '缺少 UE 上下文' };
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId, frameIds: [sender.frameId ?? 0] },
+          world: 'MAIN',
+          func: (name, text) => {
+            try {
+              const host = window.UE ? window : window.parent;
+              const editor = host?.UE?.getEditor?.(name);
+              if (!editor?.setContent) return { ok: false, error: 'UE 不可用' };
+              editor.setContent(text);
+              editor.sync?.();
+              return { ok: true };
+            } catch (e) {
+              return { ok: false, error: String(e?.message || e) };
+            }
+          },
+          args: [String(msg.name), String(msg.text || '')]
+        });
+        return results?.[0]?.result || { ok: false, error: '无返回' };
+      } catch (e) {
+        return { ok: false, error: String(e?.message || e) };
+      }
     }
     case 'WG_LOG': {
       const tag = run.totalFrames > 1 ? run.frames?.get?.(sender?.frameId)?.label : '';

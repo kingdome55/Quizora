@@ -112,6 +112,12 @@
 
   async function run(tk) {
     try {
+      try {
+        await NS.cxFont?.ready?.();
+      } catch {}
+      const fontInfo = NS.cxFont?.info?.();
+      if (fontInfo?.mapped) log('info', `字体解密已就绪：${fontInfo.mapped} 个字形`);
+
       if (settings.examScrollLoad) {
         const y = window.scrollY;
         window.scrollTo(0, document.body.scrollHeight);
@@ -147,7 +153,14 @@
             processed.add(q.key);
             continue;
           }
-          if (!q.options.length && !q.inputs.length && !q.textarea && !q.iframe && !q.editable) {
+          if (
+            !q.options.length &&
+            !q.inputs.length &&
+            !q.textarea &&
+            !q.iframe &&
+            !q.editable &&
+            !q.blankCells?.length
+          ) {
             failed.push(q.index + 1);
             F.mark(q, 'fail', '无可用输入控件');
             processed.add(q.key);
@@ -314,8 +327,11 @@
       return false;
     }
     if (msg?.type === 'WG_PROBE') {
-      sendResponse({ snapshot: A.snapshot() });
-      return false;
+      Promise.resolve(NS.cxFont?.ready?.()).then(
+        () => sendResponse({ snapshot: A.snapshot() }),
+        () => sendResponse({ snapshot: A.snapshot() })
+      );
+      return true;
     }
     return false;
   });
