@@ -116,18 +116,57 @@
     return Boolean(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable));
   }
 
+  function findBlankBoxes(cell) {
+    if (!cell) return [];
+    const nodes = [...cell.querySelectorAll('div, span, p, section, td')];
+    return nodes
+      .filter((n) => {
+        if (!n.isConnected) return false;
+        if (n.querySelector('input, textarea, [contenteditable="true"]')) return false;
+        const rect = n.getBoundingClientRect();
+        return rect.width >= 120 && rect.height >= 18;
+      })
+      .sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width)
+      .slice(0, 2);
+  }
+
   async function activateCell(cell) {
     if (!cell) return;
-    try {
-      cell.scrollIntoView({ block: 'center', inline: 'center' });
-      cell.focus?.();
-    } catch {}
-    for (const type of ['pointerdown', 'mousedown', 'mouseup', 'click']) {
+    const targets = [cell, ...findBlankBoxes(cell)];
+    for (const target of targets) {
       try {
-        cell.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+        target.scrollIntoView({ block: 'center', inline: 'center' });
+        target.focus?.();
       } catch {}
+      for (const type of ['pointerdown', 'mousedown', 'mouseup', 'click']) {
+        try {
+          target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+        } catch {}
+      }
+      await sleep(60);
     }
-    await sleep(70);
+  }
+
+  async function targetForSlot(q, i) {
+    const visible = freshInputs(q)[i];
+    if (visible) return { el: visible, visual: false };
+    const cell = cellForSlot(q, i + 1);
+    if (!cell) return null;
+    await activateCell(cell);
+    const active = document.activeElement;
+    if (isTextTarget(active)) return { el: active, visual: false };
+    const any = cell.querySelector('input[type="text"], textarea, [contenteditable="true"]');
+    if (any) return { el: any, visual: false };
+    const box = findBlankBoxes(cell)[0];
+    if (box) {
+      try {
+        box.tabIndex = 0;
+        box.focus();
+        box.contentEditable = 'true';
+      } catch {}
+      return { el: box, visual: true };
+    }
+    return null;
   }
 
   async function fillBlanks(q, blanks) {
@@ -151,20 +190,17 @@
     }
     const target = Math.min(list.length, Math.max(inputs.length, q.blankCells?.length || 0));
     const filled = new Set();
+    let visual = false;
 
     for (let i = 0; i < target; i += 1) {
-      let el = freshInputs(q)[i] || null;
-      if (!el) {
-        await activateCell(cellForSlot(q, i + 1));
-        const active = document.activeElement;
-        if (isTextTarget(active)) el = active;
-      }
-      if (!el) continue;
+      const hit = await targetForSlot(q, i);
+      if (!hit) continue;
+      if (hit.visual) visual = true;
       try {
-        el.scrollIntoView({ block: 'center', inline: 'center' });
-        el.focus?.();
-        setNativeValue(el, list[i]);
-        el.blur?.();
+        hit.el.scrollIntoView({ block: 'center', inline: 'center' });
+        hit.el.focus?.();
+        setNativeValue(hit.el, list[i]);
+        hit.el.blur?.();
         filled.add(i);
       } catch {}
     }
@@ -181,7 +217,7 @@
       } catch {}
     }
 
-    return { ok: filled.size > 0, complete: filled.size >= list.length };
+    return { ok: filled.size > 0, complete: filled.size >= list.length, visual };
   }
 
   function escapeHtml(text) {

@@ -268,6 +268,7 @@
         const res = await F.fillBlanks(q, ans.blanks || []);
         ok = res.ok;
         if (!res.complete) note = '部分空未填';
+        else if (res.visual) note = '空框直写，请核对';
       } else if (q.type === 'short') {
         ok = F.fillEditor(q, ans.text || '');
       } else {

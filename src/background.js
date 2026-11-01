@@ -98,6 +98,7 @@ function logBlankDetails(snapshot, tag = '') {
   for (const b of snapshot?.blankDetails || []) {
     const extra = b.cells ? ` / 空框 ${b.cells}` : '';
     pushLog('info', `${tag}填空 #${b.index}：空格 ${b.blanks} / 输入框 ${b.inputs}${extra}`);
+    if (b.sample) pushLog('info', `${tag}空框样本：${b.sample}`);
   }
 }
 

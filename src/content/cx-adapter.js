@@ -590,7 +590,8 @@
         stem: q.stem.slice(0, 90),
         blanks: q.blankCount,
         inputs: q.inputs.length,
-        cells: q.blankCells?.length || 0
+        cells: q.blankCells?.length || 0,
+        sample: String(q.blankCells?.[0]?.outerHTML || '').slice(0, 180)
       }));
     if (!res.count) {
       let diagnostics = null;
