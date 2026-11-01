@@ -103,55 +103,85 @@
     return norm(input.isContentEditable ? input.innerText : input.value);
   }
 
+  function cellForSlot(q, slot) {
+    const cells = q.blankCells || [];
+    const byText = cells.find((cell) => {
+      const m = norm(cell.innerText).match(/第\s*(\d+)\s*空/);
+      return m && Number(m[1]) === slot;
+    });
+    return byText || cells[slot - 1] || null;
+  }
+
+  function isTextTarget(el) {
+    return Boolean(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable));
+  }
+
+  async function activateCell(cell) {
+    if (!cell) return;
+    try {
+      cell.scrollIntoView({ block: 'center', inline: 'center' });
+      cell.focus?.();
+    } catch {}
+    for (const type of ['pointerdown', 'mousedown', 'mouseup', 'click']) {
+      try {
+        cell.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+      } catch {}
+    }
+    await sleep(70);
+  }
+
   async function fillBlanks(q, blanks) {
     if (!blanks.length) return { ok: false, complete: false };
     let inputs = freshInputs(q);
-    if (!inputs.length) {
+    if (!inputs.length && q.blankCells?.length) {
+      for (const cell of q.blankCells) await activateCell(cell);
+      inputs = freshInputs(q);
+    }
+    if (!inputs.length && !q.blankCells?.length) {
       if (q.textarea || q.iframe || q.editable) {
         return { ok: fillEditor(q, blanks.join(' ')), complete: true };
       }
       return { ok: false, complete: false };
     }
+
     let list = blanks.map((s) => String(s || '').trim()).filter(Boolean);
     if (list.length === 1 && inputs.length > 1) {
       const split = splitCombinedBlanks(list[0], inputs.length);
       if (split) list = split;
     }
-    if (inputs.length < list.length && q.blankCells?.length) {
-      for (const cell of q.blankCells) clickBox(cell);
-      await sleep(80);
-      inputs = freshInputs(q);
+    const target = Math.min(list.length, Math.max(inputs.length, q.blankCells?.length || 0));
+    const filled = new Set();
+
+    for (let i = 0; i < target; i += 1) {
+      let el = freshInputs(q)[i] || null;
+      if (!el) {
+        await activateCell(cellForSlot(q, i + 1));
+        const active = document.activeElement;
+        if (isTextTarget(active)) el = active;
+      }
+      if (!el) continue;
+      try {
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+        el.focus?.();
+        setNativeValue(el, list[i]);
+        el.blur?.();
+        filled.add(i);
+      } catch {}
     }
-    const count = Math.min(inputs.length, list.length);
-    const writeAt = (i) => {
-      const current = freshInputs(q);
-      const input = current[i];
-      if (!input) return false;
-      input.scrollIntoView({ block: 'center', inline: 'center' });
-      input.focus();
-      setNativeValue(input, list[i]);
-      input.blur();
-      return true;
-    };
 
-    for (let i = 0; i < count; i += 1) writeAt(i);
-
-    // 页面可能在输入后重新渲染输入框，重新查询并补写一次
+    // 页面可能重渲染；对仍为空的已定位输入补写一次
     await sleep(100);
-    let current = freshInputs(q);
-    const missing = [];
-    for (let i = 0; i < count; i += 1) {
-      if (!inputValue(current[i] || {})) missing.push(i);
+    const current = freshInputs(q);
+    for (let i = 0; i < target; i += 1) {
+      if (filled.has(i) || !current[i] || inputValue(current[i])) continue;
+      try {
+        setNativeValue(current[i], list[i]);
+        current[i].dispatchEvent(new Event('change', { bubbles: true }));
+        filled.add(i);
+      } catch {}
     }
-    for (const i of missing) writeAt(i);
-    if (missing.length) await sleep(80);
 
-    current = freshInputs(q);
-    let written = 0;
-    for (let i = 0; i < Math.min(current.length, list.length); i += 1) {
-      if (inputValue(current[i])) written += 1;
-    }
-    return { ok: written > 0, complete: written === current.length };
+    return { ok: filled.size > 0, complete: filled.size >= list.length };
   }
 
   function escapeHtml(text) {
