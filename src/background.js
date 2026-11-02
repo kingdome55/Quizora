@@ -304,6 +304,17 @@ async function startRun(tabIdArg) {
     return { ok: false, error: '头歌考试页不自动作答；仅支持练习/作业关卡' };
   }
   if (run.running) await stopRun();
+  if (site.id === 'educoder') {
+    lastState = {
+      status: '头歌粘贴模式',
+      detail: '粘贴限制已解除：请直接在编辑器粘贴代码并手动评测',
+      tone: 'ok',
+      site: 'educoder'
+    };
+    pushLog('ok', '头歌：粘贴限制已解除，请直接粘贴代码并手动评测');
+    broadcast({ type: 'STATE', state: lastState });
+    return { ok: true, site: 'educoder', siteLabel: '头歌', pasteOnly: true };
+  }
   pushLog('info', '正在启动…');
   try {
     const multi = site.id === 'chaoxing';
@@ -396,6 +407,38 @@ async function probe(tabIdArg) {
   const site = siteForUrl(tab.url);
   if (!site) return { ok: false, error: '当前标签页不是支持的对局或考试页' };
   pushLog('info', '正在探测页面…');
+  if (site.id === 'educoder') {
+    return {
+      ok: true,
+      site: 'educoder',
+      siteLabel: '头歌',
+      snapshot: {
+        mode: 'exam',
+        site: 'educoder',
+        url: tab.url,
+        count: 1,
+        types: { paste: 1 },
+        questions: [
+          {
+            index: 0,
+            type: 'paste',
+            stem: '头歌粘贴解锁',
+            options: [],
+            blanks: 0,
+            hasEditor: true,
+            images: 0,
+            answered: false
+          }
+        ],
+        hasEditor: true,
+        hasEvaluate: false,
+        hasNext: false,
+        blocked: false,
+        buttons: [],
+        result: ''
+      }
+    };
+  }
   try {
     const picked = await pickFrame(tab, site.files);
     let check = null;
@@ -495,7 +538,7 @@ async function handle(msg, sender) {
         config: await getConfig(),
         cache: await cacheStats(),
         running: run.running,
-        site: run.site || null,
+        site: run.site || lastState.site || null,
         state: lastState,
         history
       };
@@ -666,6 +709,17 @@ async function handle(msg, sender) {
       } catch (e) {
         return { ok: false, error: String(e?.message || e) };
       }
+    }
+    case 'EDU_PASTE_READY': {
+      lastState = {
+        status: '头歌粘贴模式',
+        detail: '粘贴限制已解除：请直接在编辑器粘贴代码并手动评测',
+        tone: 'ok',
+        site: 'educoder'
+      };
+      pushLog('ok', '头歌：粘贴限制已解除，可直接粘贴代码');
+      broadcast({ type: 'STATE', state: lastState });
+      return { ok: true };
     }
     case 'WG_LOG': {
       const tag = run.totalFrames > 1 ? run.frames?.get?.(sender?.frameId)?.label : '';

@@ -1,6 +1,6 @@
 # 题灵（Quizora）— 项目概况与当前状态
 
-> 审计日期：2026-10-31 · 工作树版本：0.7.2 · 最近真机验证：0.5.2（部分通过）
+> 审计日期：2026-10-31 · 工作树版本：0.7.3 · 最近真机验证：0.5.2（部分通过）
 
 ## 1. 项目定位
 
@@ -66,9 +66,10 @@
 | 0.6.0 | 调研成熟实现后改用 `.XztiHover1` 答案格（`input.inp`/UEditor）；Typr.js 字体解密；填空格排除出选择题 | ✅ 7 组 mock 全通过；○ 真机待复测 |
 | 0.7.0 | 头歌（EduCoder）编程作业：Monaco 主 world 读写、代码生成、评测重试、下一关、刷新续跑、考试页拒绝 | ✅ 5 组 mock 通过；○ 真机因“编辑器在子 frame/非 Monaco”失败 |
 | 0.7.1 | 跨全部 frame 识别 Monaco/Ace/CodeMirror 5/6/textarea/contenteditable；日志输出编辑器类型与 frameId | ✅ mock 两关通过；○ 真机仍“未找到编辑器”（sandbox iframe 无法 executeScript） |
-| 0.7.2 | `match_origin_as_fallback` + 内容脚本 DOM 回退：扫描同源 iframe/shadow DOM，聚焦 + insertText/合成 paste | ✅ 同源 iframe CM6 mock 通过；○ 真机待复测 |
+| 0.7.2 | `match_origin_as_fallback` + 内容脚本 DOM 回退：扫描同源 iframe/shadow DOM，聚焦 + insertText/合成 paste | ✅ 同源 iframe CM6 mock 通过；○ 真机未解决 |
+| 0.7.3 | 头歌改为粘贴解锁：hook 任务 API 改写 copy 标志 + 清理 onpaste/user-select；自动生成/评测停用 | ✅ mock 验证 API 与 DOM 解锁；○ 真机待复测 |
 
-> ⚠️ “稳定版本”定义：**0.5.2 是最近一次经过真机验证的版本，但存在已知简答题缺陷**；0.5.3–0.7.2 是针对该缺陷、多空填空、多任务点、字体反爬与头歌编程作业的修复/扩展版，尚不能称为已验证稳定版。
+> ⚠️ “稳定版本”定义：**0.5.2 是最近一次经过真机验证的版本，但存在已知简答题缺陷**；0.5.3–0.7.3 是针对该缺陷、多空填空、多任务点、字体反爬与头歌粘贴解锁的修复/扩展版，尚不能称为已验证稳定版。
 
 ## 4. 目录结构（当前工程）
 

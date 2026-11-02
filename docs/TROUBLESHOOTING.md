@@ -269,7 +269,19 @@
 
 ---
 
-## E. 头歌（EduCoder）编程作业
+## E. 头歌（EduCoder）粘贴解锁（0.7.3）
+
+> 以下 E1–E6 的自动答题排障已停用；粘贴问题见 E7。
+
+### E7. 头歌粘贴仍被禁止
+
+- 确认日志出现“头歌：粘贴限制已解除”；没有则刷新页面（脚本必须 `document_start` 注入）。
+- 打开 DevTools → Network，确认任务数据来自 `/api/tasks` 或 `json?homework_common_id` 的 **fetch** 请求；若是 XHR，当前 hook 不覆盖，需要补 XHR hook。
+- 看响应 JSON 中 `shixun` / `challenge` 的 copy 字段名；若平台改成 `allow_copy` 等，把字段名发回补充。
+- 编辑器内先点一下再 Ctrl+V；部分 Monaco 需要焦点在编辑区。
+- 考试页（`/exam`）按设计不解锁。
+
+## E. 头歌（EduCoder）编程作业（历史，已停用）
 
 ### E1. 探测 0 / 未识别到题目
 

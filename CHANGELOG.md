@@ -2,6 +2,26 @@
 
 本项目采用语义化版本。当前处于公开测试阶段（0.x），接口与行为仍可能调整。
 
+## [0.7.3] - 2026-11-02
+
+### Changed
+
+- **头歌改为“粘贴解锁”模式，不再自动生成/评测**：自动做题正确率依赖大模型对编程题的一次性正确性，失败会卡关；按用户要求退回到“让编辑器可以粘贴你自己的代码”。
+- 新增 `src/content/edu-paste.js`（MAIN world，`document_start`，`all_frames`）：
+  - hook `window.fetch`，改写任务 API（`/api/tasks`、`json?homework_common_id`）返回中的 `shixun.can_copy / forbid_copy / copy_for_exercise*` 与 `challenge.diasble_copy`，解锁平台级复制开关（参考 EduCoder Copy Helper 的修改点）；
+  - 递归清理 `input/textarea/[contenteditable]/.monaco-editor/.cm-editor/.ace_editor/.CodeMirror` 上的 `onpaste`，恢复 `user-select:text`；
+  - MutationObserver + 短轮询持续清理动态插入的编辑器。
+- 新增 `src/content/edu-paste-ready.js`（隔离 world，`document_start`，仅 top frame）：上报 `EDU_PASTE_READY`，面板显示“头歌粘贴模式”。
+- 面板/探测在头歌返回固定快照（`types.paste=1`）；开始按钮不再注入自动做题脚本。
+
+### Removed
+
+- `edu-adapter.js` / `edu-main.js` 不再参与头歌流程（文件保留用于后续可选恢复，不进 manifest）。
+
+### Tested
+
+- 本地 mock：任务 API 返回 `forbid_copy:true` 时，改写后 `can_copy=true / forbid_copy=false`；`document.onpaste`、编辑器 `onpaste` 被清空，`user-select:text` 生效。
+
 ## [0.7.2] - 2026-11-02
 
 ### Fixed
