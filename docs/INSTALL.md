@@ -1,13 +1,13 @@
 # 安装与更新指南
 
-> 适用于题灵（Quizora）0.7.4。安装前请确认浏览器为较新的 Edge / Chrome（支持 Manifest V3 与 Side Panel）。
+> 适用于题灵（Quizora）0.7.5。安装前请确认浏览器为较新的 Edge / Chrome（支持 Manifest V3 与 Side Panel）。
 
 ## 1. 安装包结构
 
-发布包 `quizora-v0.7.4.zip` 解压后应得到：
+发布包 `quizora-v0.7.5.zip` 解压后应得到：
 
 ```
-quizora-v0.7.4/
+quizora-v0.7.5/
 ├─ manifest.json
 ├─ README.md
 ├─ CHANGELOG.md
@@ -20,11 +20,11 @@ quizora-v0.7.4/
 
 ## 2. Microsoft Edge 安装
 
-1. 下载 `release/quizora-v0.7.4.zip`。
+1. 下载 `release/quizora-v0.7.5.zip`。
 2. 右键解压到固定目录，例如 `D:\Quizora\`。
 3. 打开 `edge://extensions`。
 4. 打开页面左下角的“开发人员模式”。
-5. 点击“加载解压缩的扩展”，选择 `D:\Quizora\quizora-v0.7.4`（该目录内应直接看到 `manifest.json`）。
+5. 点击“加载解压缩的扩展”，选择 `D:\Quizora\quizora-v0.7.5`（该目录内应直接看到 `manifest.json`）。
 6. 在工具栏找到“题灵”图标；若被折叠，点击拼图图标并固定。
 7. 点击图标打开侧边栏。
 
@@ -80,7 +80,7 @@ quizora-v0.7.4/
 
 | 检查项 | 期望 |
 | --- | --- |
-| 扩展管理页版本 | 0.7.4 |
+| 扩展管理页版本 | 0.7.5 |
 | 工具栏图标 | 紫蓝渐变 + 白色对勾气泡 |
 | 侧边栏标题 | 题灵 Quizora |
 | 测试连接 | 返回有效下标与置信度 |

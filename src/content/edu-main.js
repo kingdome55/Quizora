@@ -228,6 +228,7 @@
         new KeyboardEvent('keyup', { key: 'a', code: 'KeyA', ctrlKey: true, bubbles: true, cancelable: true })
       );
     } catch {}
+    const before = readEditor(type, el);
     try {
       doc.execCommand('selectAll', false, null);
     } catch {}
@@ -235,15 +236,25 @@
     try {
       inserted = doc.execCommand('insertText', false, code);
     } catch {}
-    if (!inserted) {
+    await sleep(220);
+    let value = readEditor(type, el);
+    let changed = value !== before;
+
+    // 只有确认没写进去时才走合成 paste，避免同一次写入出现两份
+    if (!changed) {
       try {
         const dt = new DataTransfer();
         dt.setData('text/plain', code);
         target.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
       } catch {}
+      await sleep(220);
+      value = readEditor(type, el);
+      changed = value !== before;
     }
+
+    // textarea 兜底同样只在没有变化时执行，避免 insertText + setter 重复写入
     const active = doc.activeElement;
-    if (active && active.tagName === 'TEXTAREA') {
+    if (!changed && active && active.tagName === 'TEXTAREA') {
       try {
         const win = active.ownerDocument.defaultView || window;
         const setter = Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement.prototype, 'value')?.set;
@@ -253,13 +264,16 @@
         active.dispatchEvent(new Event('change', { bubbles: true }));
         inserted = true;
       } catch {}
+      await sleep(160);
+      value = readEditor(type, el);
+      changed = value !== before;
     }
-    await sleep(180);
-    const value = readEditor(type, el);
+
     return {
-      ok: value.length > 0,
+      ok: changed && value.length > 0,
       length: value.length,
-      inserted,
+      beforeLength: before.length,
+      inserted: changed,
       active: active ? `${active.tagName}.${String(active.className || '')}` : ''
     };
   }
@@ -386,7 +400,13 @@
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
           if (!running || tk !== token) return;
           report('生成代码', `第 ${passed + 1} 关 · 第 ${attempt}/${maxAttempts} 次`, 'work');
-          log('info', `第 ${passed + 1} 关：${title || '未命名'}（${model.language || '未知语言'}，模板 ${model.value.length} 字符）`);
+          log(
+            'info',
+            `第 ${passed + 1} 关：${title || '未命名'}（${model.language || '未知语言'}，说明 ${desc.length} 字符，模板 ${model.value.length} 字符）`
+          );
+          if (guard === 0 && desc) {
+            log('info', `任务说明预览：${desc.slice(0, 140).replace(/\s+/g, ' ')}…`);
+          }
 
           const ans = await send({
             type: 'EDU_SOLVE',
@@ -404,20 +424,29 @@
             return;
           }
 
-          const wr = await send({
-            type: 'EDU_SET_CODE',
-            frameId: editorFrameId,
-            editorId: model.id,
-            editorType: model.type,
-            code: ans.code
-          });
-          if (!wr?.ok) {
-            log('error', `写入 ${editorType || '编辑器'} 失败：${wr?.error || '未知错误'}`);
-            break;
+          const normCode = (s) => String(s || '').replace(/\s+/g, '').trim();
+          const codeNorm = normCode(ans.code);
+          const valueNorm = normCode(model.value);
+          const occurrences = codeNorm ? valueNorm.split(codeNorm).length - 1 : 0;
+          if (valueNorm === codeNorm) {
+            log('info', '编辑器内容与生成代码一致，跳过重复写入');
+          } else {
+            if (occurrences > 1) log('warn', `编辑器已有 ${occurrences} 份相同代码，重写清理`);
+            const wr = await send({
+              type: 'EDU_SET_CODE',
+              frameId: editorFrameId,
+              editorId: model.id,
+              editorType: model.type,
+              code: ans.code
+            });
+            if (!wr?.ok) {
+              log('error', `写入 ${editorType || '编辑器'} 失败：${wr?.error || '未知错误'}`);
+              break;
+            }
+            if (wr.id) model.id = wr.id;
+            log('ok', `已写入代码（${wr.length} 字符）`);
           }
-          if (wr.id) model.id = wr.id;
           model.value = ans.code;
-          log('ok', `已写入代码（${wr.length} 字符）`);
 
           report('评测中', `第 ${passed + 1} 关 · 第 ${attempt}/${maxAttempts} 次`, 'work');
           const before = evalBaseline();
@@ -480,6 +509,10 @@
   }
 
   function start(next, resume = 0) {
+    if (running) {
+      log('warn', '头歌自动答题已在运行，忽略重复开始');
+      return;
+    }
     settings = next || {};
     token += 1;
     running = true;
