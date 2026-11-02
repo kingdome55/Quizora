@@ -8,13 +8,15 @@ const SYSTEM_PROMPT = `你是答题助手，负责从给定选项中选出唯一
 const EXAM_PROMPT = `你是严谨的考试答题助手，根据题型、题干与选项给出最终答案。
 先在内部逐项分析、排除明显错误项，再作答；reason 用 1-2 句（不超过 60 字）说明关键依据。
 只输出一个 JSON 对象，不要输出任何其他文字：
-{"indices": [0], "blanks": ["答案1"], "text": "简答内容", "confidence": 0.0, "reason": "不超过60字"}
+{"answer": "B", "blanks": ["答案1"], "text": "简答内容", "confidence": 0.0, "reason": "不超过60字"}
 规则：
-- single（单选）/ judge（判断）：indices 只放 1 个 0 基下标；
-- multiple（多选）：indices 必须包含全部正确下标，按升序；不要为了凑“多选”而添加错误项，只有一个正确项时也可只给一个；
-- blank（填空）：blanks 按空格顺序给出，只给要填入的词/短语，不要解释；数量必须等于题目要求的空格数；
+- single（单选）：answer 只写一个选项字母（A/B/C/D…），不要写选项全文；
+- multiple（多选）：answer 写全部正确选项字母，按字母顺序连写（如 ACD）；不要漏选，也不要为了凑“多选”而添加错误项；只有一个正确项时也可只写一个字母；
+- judge（判断）：answer 只写“对”或“错”，也可以写选项字母；
+- blank（填空）：blanks 按空格顺序给出，只给要填入的词/短语，不要解释；数量必须严格等于题目要求的空格数；
   blanks 的每个元素只对应一个空，不要把多个空的答案合并成一个字符串，也不要用“；”“、”等分隔符塞进一个元素；
 - short（简答/论述）：text 用中文作答，分点陈述，80-200 字；
+- 也兼容 indices（0 基下标），但优先使用 answer；
 - 计算/电路/图片题：先结合图片完成计算，只给最终结果；
 - 不确定时给出最可能的答案，并把 confidence 调低。`;
 
@@ -83,18 +85,48 @@ function buildMessages(question, options, kind) {
   ];
 }
 
+function cleanStem(text) {
+  let s = String(text || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  s = s.replace(/^第\s*\d+\s*题\s*[：:.、]?\s*/, '');
+  s = s.replace(/^\d{1,2}\s*[、．:：]\s*/, '');
+  s = s.replace(/^\d{1,2}\.\s+/, '');
+  s = s.replace(/^(单选题|多选题|判断题|填空题|简答题|论述题)\s*[：:]\s*/, '');
+  return s.trim();
+}
+
+function cleanOption(text) {
+  return String(text || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[A-Fa-f]\s*[.、．:：]\s*/, '');
+}
+
+function optionLetter(i) {
+  return String.fromCharCode(65 + i);
+}
+
 function buildExamMessages({ question, type, options, blankCount, images = [] }) {
-  const lines = [`题型：${TYPE_LABELS[type] || type}`, `题干：\n${question}`];
+  const stem = cleanStem(question);
+  const lines = [`题型：${TYPE_LABELS[type] || type}`, `题干：\n${stem}`];
   if (options.length) {
     lines.push('\n选项：');
-    options.forEach((o, i) => lines.push(`${String.fromCharCode(65 + i)}. ${o}（下标 ${i}）`));
+    options.forEach((o, i) => lines.push(`${optionLetter(i)}. ${cleanOption(o)}`));
   }
   if (type === 'blank') {
     lines.push(`\n空格数量：${blankCount || 1}`);
-    lines.push('blanks 数组长度必须与空格数量一致。');
+    lines.push(`blanks 数组长度必须严格等于 ${blankCount || 1}。`);
     lines.push('第 1 个元素对应第 1 空，第 2 个对应第 2 空，以此类推。');
     lines.push('每个元素只写一个空的答案；不要用分隔符把多个空合并进一个元素。');
   }
+  const rules = {
+    single: '本题是单选：answer 只写一个选项字母（如 B）。',
+    multiple: '本题是多选：answer 写全部正确选项字母，按字母顺序连写（如 ACD）。',
+    judge: '本题是判断：answer 只写 对 或 错（也可写选项字母）。',
+    blank: '本题是填空：每个空一个元素，数量严格等于空格数。',
+    short: '本题是简答：text 写中文答案。'
+  };
+  if (rules[type]) lines.push(`\n${rules[type]}`);
   if (images.length) lines.push('\n题干图片已附上，请结合图片理解题意。');
 
   const text = lines.join('\n');
@@ -173,39 +205,120 @@ function splitCombinedBlanks(value, count) {
   return parts.length === count ? parts : null;
 }
 
-function normalizeExam(parsed, type, optionCount, blankCount) {
+function normalizeText(value) {
+  return String(value || '')
+    .replace(/\s+/g, '')
+    .replace(/[，。；：、,.!?！？()（）]/g, '')
+    .toLowerCase();
+}
+
+function parseAnswerLetters(answer, count) {
+  const s = String(answer || '').trim();
+  if (!s || s.length > 12) return [];
+  if (!/^[A-Za-z](?:\s*[,，、;；/]?\s*[A-Za-z])*$/.test(s)) return [];
+  const out = [];
+  for (const ch of s.match(/[A-Za-z]/g) || []) {
+    const idx = ch.toUpperCase().charCodeAt(0) - 65;
+    if (idx >= 0 && idx < count && !out.includes(idx)) out.push(idx);
+  }
+  return out.sort((a, b) => a - b);
+}
+
+function judgeIndex(answer, options) {
+  const a = normalizeText(answer);
+  if (!a) return -1;
+  const yes = /^(对|正确|是|√|true|t|1)$/i.test(a);
+  const no = /^(错|错误|否|×|false|f|0)$/i.test(a);
+  if (!yes && !no) return -1;
+  const pattern = yes ? /对|正确|是|√|true|t|1/ : /错|错误|否|×|false|f|0/;
+  return options.findIndex((o) => pattern.test(normalizeText(cleanOption(o))));
+}
+
+function matchOptionText(answer, options) {
+  const stripped = String(answer || '')
+    .trim()
+    .replace(/^[A-Fa-f]\s*[.、．:：]\s*/, '');
+  const target = normalizeText(stripped);
+  if (!target) return -1;
+  let exact = -1;
+  options.forEach((o, i) => {
+    if (normalizeText(cleanOption(o)) === target) exact = i;
+  });
+  if (exact >= 0) return exact;
+  if (target.length < 2) return -1;
+  let best = -1;
+  options.forEach((o, i) => {
+    const n = normalizeText(cleanOption(o));
+    if (n.length >= 2 && (n.includes(target) || target.includes(n))) {
+      if (best < 0 || n.length > normalizeText(cleanOption(options[best])).length) best = i;
+    }
+  });
+  return best;
+}
+
+function normalizeExam(parsed, type, options = [], blankCount = 0) {
   if (!parsed) return { ok: false, error: '模型返回无法解析' };
+  const optionCount = options.length;
   const confidence = Math.max(0, Math.min(1, Number(parsed.confidence ?? 0.7) || 0.7));
   const reason = String(parsed.reason || '').slice(0, 80);
-  let indices = Array.isArray(parsed.indices) ? parsed.indices.map(Number) : [];
+  const answer = String(parsed.answer ?? '')
+    .trim()
+    .replace(/[。.]+$/, '');
+  let indices = [];
+
+  if (type === 'judge') {
+    const judged = judgeIndex(answer, options);
+    if (judged >= 0) indices = [judged];
+  }
+  if (!indices.length && answer) {
+    const letters = parseAnswerLetters(answer, optionCount);
+    if (letters.length) indices = letters;
+  }
+  if (!indices.length && answer) {
+    const textIndex = matchOptionText(answer, options);
+    if (textIndex >= 0) indices = [textIndex];
+  }
+  if (!indices.length && Array.isArray(parsed.indices)) indices = parsed.indices.map(Number);
   if (!indices.length && parsed.index !== undefined) indices = [Number(parsed.index)];
 
   if (type === 'single' || type === 'judge') {
-    const index = indices[0];
-    if (!Number.isInteger(index) || index < 0 || index >= optionCount) {
-      return { ok: false, error: '模型未返回有效选项' };
-    }
-    return { ok: true, indices: [index], confidence, reason };
+    const valid = [...new Set(indices.filter((i) => Number.isInteger(i) && i >= 0 && i < optionCount))];
+    if (valid.length !== 1) return { ok: false, error: '单选/判断必须返回一个有效选项' };
+    return { ok: true, indices: [valid[0]], confidence, reason };
   }
 
   if (type === 'multiple') {
     const uniq = [...new Set(indices.filter((i) => Number.isInteger(i) && i >= 0 && i < optionCount))].sort(
       (a, b) => a - b
     );
-    if (!uniq.length) return { ok: false, error: '模型未返回有效多选下标' };
+    if (!uniq.length) return { ok: false, error: '模型未返回有效多选选项' };
     return { ok: true, indices: uniq, confidence, reason };
   }
 
   if (type === 'blank') {
-    const raw = Array.isArray(parsed.blanks) ? parsed.blanks : [parsed.text];
-    let blanks = raw.map((s) => String(s ?? '').trim()).filter(Boolean);
+    let blanks = [];
+    if (Array.isArray(parsed.blanks)) {
+      blanks = parsed.blanks.map((s) => String(s ?? '').trim()).filter(Boolean);
+    }
+    if (!blanks.length && answer) {
+      blanks = String(answer)
+        .split(/\r?\n|#|；|;|、|\||｜|\s+\/\s+|／/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    if (!blanks.length && parsed.text) blanks = [String(parsed.text).trim()].filter(Boolean);
     if (!blanks.length) return { ok: false, error: '模型未给出填空答案' };
     if (blanks.length === 1 && blankCount > 1) {
       const split = splitCombinedBlanks(blanks[0], blankCount);
       if (split) blanks = split;
     }
-    const out = blankCount > 0 ? blanks.slice(0, blankCount) : blanks;
-    return { ok: true, blanks: out, confidence, reason, partial: blankCount > 0 && out.length < blankCount };
+    if (blankCount > 0 && blanks.length !== blankCount) {
+      return {
+        ok: false,
+        error: `填空答案数量不符：需要 ${blankCount} 个，模型给了 ${blanks.length} 个`
+      };
+    }
+    return { ok: true, blanks, confidence, reason };
   }
 
   const text = String(parsed.text || parsed.answer || '').trim();
@@ -220,7 +333,14 @@ async function runJson({ config, messages, temperature = 0, validate }) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const raw = await callChat({ config, messages, jsonMode, temperature });
-      return validate(extractJson(raw));
+      const result = validate(extractJson(raw));
+      if (result?.ok) return result;
+      lastError = new Error(result?.error || '模型答案无效');
+      if (attempt < 2) {
+        await sleep(attempt === 0 ? 900 : 1800);
+        continue;
+      }
+      return result || { ok: false, error: lastError.message };
     } catch (e) {
       lastError = e;
       if (e.status === 400 && jsonMode) {
@@ -315,7 +435,7 @@ export async function askExam({ config, question, type = 'single', options = [],
       config,
       messages: buildExamMessages({ question, type, options, blankCount, images: imgs }),
       temperature: type === 'short' ? 0.2 : 0,
-      validate: (parsed) => normalizeExam(parsed, type, options.length, blankCount)
+      validate: (parsed) => normalizeExam(parsed, type, options, blankCount)
     });
 
   const out = await request(images);

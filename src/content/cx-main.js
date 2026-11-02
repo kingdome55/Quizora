@@ -286,6 +286,23 @@
         ok = F.fillEditor(q, ans.text || '');
       } else {
         ok = F.choose(q, ans.indices || [], q.type);
+        if (ok && ans.indices?.length) {
+          let verified = false;
+          for (let check = 0; check < 2; check += 1) {
+            await sleep(check === 0 ? 150 : 300);
+            const selected = q.options.filter((o) => A.isSelected(o)).length;
+            const allIntended = ans.indices.every((i) => A.isSelected(q.options[i]));
+            const extra = q.type === 'multiple' ? selected > ans.indices.length : selected > 1;
+            if (allIntended && !extra) {
+              verified = true;
+              break;
+            }
+          }
+          if (!verified) {
+            ok = false;
+            note = '选项未选中';
+          }
+        }
       }
 
       if (ok && settings.mode === 'exam' && (q.type === 'blank' || q.type === 'short')) {
