@@ -2,6 +2,24 @@
 
 本项目采用语义化版本。当前处于公开测试阶段（0.x），接口与行为仍可能调整。
 
+## [0.7.1] - 2026-11-02
+
+### Fixed
+
+- **头歌编辑器识别失败**：真实页面中编辑器可能位于**子 iframe**，或已从 Monaco 换成 CodeMirror/Ace；0.7.0 只在内容脚本所在 frame 找 `window.monaco`，因此一直等待并最终报“未检测到 Monaco 编辑器”。
+- 新增 `EDU_FIND_EDITOR`：在 background 侧用 `chrome.webNavigation.getAllFrames` 枚举全部 frame，再逐帧在 MAIN world 扫描编辑器，返回 `{type, id, frameId, language, value}`。
+- 支持 6 类编辑器：Monaco、Ace、CodeMirror 5、CodeMirror 6、textarea、contenteditable。
+  - Monaco/Ace/CM5/CM6 优先调用各自 setValue/dispatch；
+  - CodeMirror 6 无实例时用 `.cm-content` + `execCommand('insertText')`（模拟输入，不触发 paste）；
+  - textarea 用原生 setter + input/change。
+- 启动日志新增 `编辑器：monaco/ace/cm5/cm6 · frame#N · 语言 · 模板 N 字符`，便于确认真实编辑器类型。
+- 写入后回传实际编辑器 id；下一关重新跨 frame发现编辑器，兼容 URL/iframe 重建。
+
+### Tested
+
+- 本地 headless Edge mock：两关通过（含一次失败重试），日志出现编辑器类型与 frame；失败/演练/考试页路径保持正常。
+- 说明：真实头歌页面的编辑器类型需以启动日志为准；若日志显示 `cm6`/`ace`，则 0.7.0 的 Monaco 假设不成立，本版已覆盖。
+
 ## [0.7.0] - 2026-11-02
 
 ### Added

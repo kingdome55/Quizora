@@ -157,7 +157,11 @@
 
   function snapshot() {
     const reason = blocked();
-    const hasEditor = Boolean(document.querySelector('.monaco-editor, .monaco-editor textarea, [role="textbox"]'));
+    const hasEditor = Boolean(
+      document.querySelector(
+        '.monaco-editor, .monaco-editor textarea, .ace_editor, .CodeMirror, .cm-editor, .cm-content[contenteditable="true"], [role="textbox"]'
+      )
+    );
     const desc = description();
     const evalBtn = findExact('评测');
     const nextBtn = findLike(/^(下一关|下一题|继续|进入下一关)$/);
@@ -170,7 +174,7 @@
       stem: `${title || '编程题'}${desc ? ' · ' + desc.slice(0, 60) : ''}`,
       options: [],
       blanks: 0,
-      hasEditor: true,
+      hasEditor,
       images: 0,
       answered: false
     };

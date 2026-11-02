@@ -277,7 +277,8 @@
 - 看探测快照的 `hasEditor / hasEvaluate / blocked / buttons / result`：
   - `hasEvaluate=false`：没找到“评测”按钮；
   - `blocked=true`：被考试页保护拦截；
-  - `hasEditor=false`：Monaco 未渲染，刷新后重试。
+  - `hasEditor=false`：当前 frame 没看到编辑器；0.7.1 会跨 frame 查找，仍失败则看启动日志。
+- 启动日志第一行应出现 `编辑器：monaco/ace/cm5/cm6 · frame#N`；若没有，把日志与 `buttons/result` 发回。
 - 学习通内嵌页需要 iframe 已加载 `*.educoder.net`；扩展的静态内容脚本覆盖该域名。
 
 ### E2. 找不到“评测”按钮
@@ -287,8 +288,8 @@
 
 ### E3. 代码写入失败
 
-- 日志 `写入 Monaco 失败：…`：确认右侧 `.monaco-editor` 已出现；刷新页面后重新开始。
-- `EDU_STATE` 返回“Monaco 未加载”：页面尚未初始化，等 5–10 秒再点开始。
+- 日志 `写入 monaco/ace/cm5/cm6 失败：…`：确认右侧编辑器已出现；刷新页面后重新开始。
+- 日志没有 `编辑器：…`：0.7.1 未发现任何受支持编辑器；把日志与页面 frame 信息发回。
 
 ### E4. 评测一直不通过
 

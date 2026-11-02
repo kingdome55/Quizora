@@ -4,6 +4,178 @@ import { askLLM, askExam, askCode } from './background/llm.js';
 import { siteForUrl, isReadOnlyUrl } from './background/sites.js';
 import { pickFrame, pickFrames, clearFrame } from './background/frame.js';
 
+// 在 MAIN world 中执行：识别 Monaco / Ace / CodeMirror 5/6 / textarea / contenteditable
+// 只依赖页面全局与 DOM，不能引用 background 的其它变量
+function eduEditorScript(mode, editorId, code) {
+  const rectOk = (el) => {
+    try {
+      const r = el.getBoundingClientRect();
+      return r.width >= 20 && r.height >= 10;
+    } catch {
+      return false;
+    }
+  };
+  const list = [];
+  const add = (type, id, language, value, el) => {
+    const text = String(value == null ? '' : value);
+    list.push({ type, id, language: String(language || ''), value: text, length: text.length, visible: el ? rectOk(el) : true });
+  };
+
+  try {
+    const ms = window.monaco?.editor?.getModels?.() || [];
+    ms.forEach((m, i) => {
+      try {
+        add('monaco', `monaco:${i}`, m.getLanguageId ? m.getLanguageId() : '', m.getValue ? m.getValue() : '', null);
+      } catch {}
+    });
+  } catch {}
+  try {
+    [...document.querySelectorAll('.ace_editor')].forEach((el, i) => {
+      const ed = el.env?.editor;
+      if (ed?.getValue) add('ace', `ace:${i}`, ed.session?.$modeId || ed.getOption?.('mode') || '', ed.getValue(), el);
+    });
+  } catch {}
+  try {
+    [...document.querySelectorAll('.CodeMirror')].forEach((el, i) => {
+      const cm = el.CodeMirror;
+      if (cm?.getValue) add('cm5', `cm5:${i}`, cm.getMode?.()?.name || '', cm.getValue(), el);
+    });
+  } catch {}
+  try {
+    [...document.querySelectorAll('.cm-editor')].forEach((el, i) => {
+      const view = el.cmView?.view || el.cmView;
+      const value = view?.state?.doc ? view.state.doc.toString() : el.querySelector('.cm-content')?.innerText || '';
+      add('cm6', `cm6:${i}`, '', value, el);
+    });
+  } catch {}
+  try {
+    [...document.querySelectorAll('textarea')]
+      .filter((el) => !el.closest('.monaco-editor,.ace_editor,.CodeMirror,.cm-editor'))
+      .forEach((el, i) => {
+        if (el.value || rectOk(el)) add('textarea', `textarea:${i}`, '', el.value, el);
+      });
+  } catch {}
+  try {
+    [...document.querySelectorAll('[contenteditable="true"]')]
+      .filter((el) => !el.closest('.cm-editor'))
+      .forEach((el, i) => {
+        if (rectOk(el)) add('editable', `editable:${i}`, '', el.innerText, el);
+      });
+  } catch {}
+
+  const order = { monaco: 0, ace: 1, cm5: 2, cm6: 3, textarea: 4, editable: 5 };
+  list.sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || b.length - a.length);
+
+  if (mode === 'find') return { url: location.href, editors: list };
+
+  const target =
+    (editorId && list.find((e) => e.id === editorId)) ||
+    list.find((e) => e.value.trim()) ||
+    list[0] ||
+    null;
+  if (!target) return { ok: false, error: '未找到代码编辑器' };
+
+  const idx = Number(String(target.id).split(':')[1] || 0);
+  try {
+    if (target.type === 'monaco') {
+      const model = window.monaco.editor.getModels()[idx];
+      if (!model) return { ok: false, error: 'Monaco 模型不存在' };
+      model.setValue(code);
+      return { ok: true, id: target.id, type: target.type, length: model.getValue().length };
+    }
+    if (target.type === 'ace') {
+      const ed = document.querySelectorAll('.ace_editor')[idx]?.env?.editor;
+      if (!ed) return { ok: false, error: 'Ace 实例不存在' };
+      ed.setValue(code, -1);
+      return { ok: true, id: target.id, type: target.type, length: ed.getValue().length };
+    }
+    if (target.type === 'cm5') {
+      const cm = document.querySelectorAll('.CodeMirror')[idx]?.CodeMirror;
+      if (!cm) return { ok: false, error: 'CodeMirror 5 实例不存在' };
+      cm.setValue(code);
+      return { ok: true, id: target.id, type: target.type, length: cm.getValue().length };
+    }
+    if (target.type === 'cm6') {
+      const el = document.querySelectorAll('.cm-editor')[idx];
+      const view = el?.cmView?.view || el?.cmView;
+      if (view?.state?.doc && view.dispatch) {
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: code } });
+        return { ok: true, id: target.id, type: target.type, length: view.state.doc.toString().length };
+      }
+      const content = el?.querySelector('.cm-content');
+      if (!content) return { ok: false, error: 'CodeMirror 6 实例不存在' };
+      content.focus();
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(content);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.execCommand('insertText', false, code);
+      return { ok: true, id: target.id, type: target.type, length: content.innerText.length };
+    }
+    if (target.type === 'textarea') {
+      const el = [...document.querySelectorAll('textarea')]
+        .filter((e) => !e.closest('.monaco-editor,.ace_editor,.CodeMirror,.cm-editor'))[idx];
+      if (!el) return { ok: false, error: 'textarea 不存在' };
+      const win = el.ownerDocument.defaultView || window;
+      const setter = Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement.prototype, 'value')?.set;
+      if (setter) setter.call(el, code);
+      else el.value = code;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return { ok: true, id: target.id, type: target.type, length: el.value.length };
+    }
+    if (target.type === 'editable') {
+      const el = [...document.querySelectorAll('[contenteditable="true"]')].filter((e) => !e.closest('.cm-editor'))[idx];
+      if (!el) return { ok: false, error: '可编辑区不存在' };
+      el.focus();
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.execCommand('insertText', false, code);
+      el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      return { ok: true, id: target.id, type: target.type, length: el.innerText.length };
+    }
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+  return { ok: false, error: '不支持的编辑器类型' };
+}
+
+async function runEduEditor(tabId, frameIds, mode, editorId = '', code = '') {
+  return chrome.scripting.executeScript({
+    target: { tabId, ...(frameIds ? { frameIds } : { allFrames: true }) },
+    world: 'MAIN',
+    func: eduEditorScript,
+    args: [mode, editorId, code]
+  });
+}
+
+async function findEduEditors(tabId) {
+  const frames = await chrome.webNavigation.getAllFrames({ tabId }).catch(() => [{ frameId: 0 }]);
+  const results = await Promise.all(
+    (frames || [{ frameId: 0 }]).map(async (f) => {
+      try {
+        const res = await runEduEditor(tabId, [f.frameId], 'find');
+        const data = res?.[0]?.result;
+        return data?.editors?.length ? { frameId: f.frameId, url: data.url, editors: data.editors } : null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  const all = [];
+  for (const item of results) {
+    if (!item) continue;
+    for (const editor of item.editors) all.push({ ...editor, frameId: item.frameId, url: item.url });
+  }
+  const order = { monaco: 0, ace: 1, cm5: 2, cm6: 3, textarea: 4, editable: 5 };
+  all.sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || b.length - a.length);
+  return all;
+}
+
 const ports = new Set();
 const history = [];
 let lastState = { status: '待机', detail: '未开始', tone: 'idle' };
@@ -377,35 +549,13 @@ async function handle(msg, sender) {
       }
       return res;
     }
-    case 'EDU_STATE': {
+    case 'EDU_FIND_EDITOR': {
       const tabId = sender?.tab?.id;
       if (!tabId) return { ok: false, error: '缺少标签页' };
       try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId, frameIds: [sender.frameId ?? 0] },
-          world: 'MAIN',
-          func: () => {
-            const monaco = window.monaco;
-            if (!monaco?.editor?.getModels) return { ok: false, error: 'Monaco 未加载' };
-            try {
-              const models = monaco.editor.getModels().map((m) => ({
-                uri: String(m.uri),
-                language: m.getLanguageId ? m.getLanguageId() : '',
-                value: m.getValue()
-              }));
-              return {
-                ok: true,
-                models,
-                taskId: window.taskId || '',
-                paths: window.taskChallengePath || '',
-                url: location.href
-              };
-            } catch (e) {
-              return { ok: false, error: String(e?.message || e) };
-            }
-          }
-        });
-        return results?.[0]?.result || { ok: false, error: '无返回' };
+        const editors = await findEduEditors(tabId);
+        if (!editors.length) return { ok: false, error: '未找到代码编辑器' };
+        return { ok: true, editor: editors[0], editors: editors.slice(0, 8) };
       } catch (e) {
         return { ok: false, error: String(e?.message || e) };
       }
@@ -413,25 +563,9 @@ async function handle(msg, sender) {
     case 'EDU_SET_CODE': {
       const tabId = sender?.tab?.id;
       if (!tabId || typeof msg.code !== 'string') return { ok: false, error: '缺少代码' };
+      const frameId = Number.isInteger(msg.frameId) ? msg.frameId : sender?.frameId ?? 0;
       try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId, frameIds: [sender.frameId ?? 0] },
-          world: 'MAIN',
-          func: (uri, code) => {
-            const monaco = window.monaco;
-            const models = monaco?.editor?.getModels?.() || [];
-            if (!models.length) return { ok: false, error: '未找到代码模型' };
-            let model = uri ? models.find((m) => String(m.uri) === uri) : null;
-            if (!model) model = models.slice().sort((a, b) => b.getValue().length - a.getValue().length)[0];
-            try {
-              model.setValue(code);
-              return { ok: true, uri: String(model.uri), length: model.getValue().length };
-            } catch (e) {
-              return { ok: false, error: String(e?.message || e) };
-            }
-          },
-          args: [String(msg.uri || ''), msg.code]
-        });
+        const results = await runEduEditor(tabId, [frameId], 'set', msg.editorId || '', msg.code);
         return results?.[0]?.result || { ok: false, error: '无返回' };
       } catch (e) {
         return { ok: false, error: String(e?.message || e) };

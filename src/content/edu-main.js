@@ -75,25 +75,29 @@
     log('ok', detail);
   }
 
-  async function waitState(tk, timeout = 25000) {
+  let editorFrameId = null;
+  let editorType = '';
+
+  async function findEditor(tk, timeout = 25000) {
     const start = Date.now();
     while (Date.now() - start < timeout) {
       if (!running || tk !== token) return null;
-      const st = await send({ type: 'EDU_STATE' });
-      if (st?.ok && Array.isArray(st.models) && st.models.length) return st;
+      const res = await send({ type: 'EDU_FIND_EDITOR' });
+      if (res?.ok && res.editor) {
+        editorFrameId = res.editor.frameId;
+        editorType = res.editor.type;
+        log(
+          'info',
+          `编辑器：${editorType} · frame#${editorFrameId} · ${res.editor.language || '未知语言'} · 模板 ${res.editor.value?.length || 0} 字符`
+        );
+        if (res.editors?.length > 1) {
+          log('info', `可选编辑器：${res.editors.map((e) => `${e.type}@#${e.frameId}`).join('，')}`);
+        }
+        return res.editor;
+      }
       await sleep(800);
     }
     return null;
-  }
-
-  function pickModel(st) {
-    const models = (st?.models || []).filter((m) => m && typeof m.value === 'string');
-    if (!models.length) return null;
-    const nonEmpty = models.filter((m) => m.value.trim());
-    const pool = nonEmpty.length ? nonEmpty : models;
-    const sorted = pool.slice().sort((a, b) => b.value.length - a.value.length);
-    if (models.length > 1) log('warn', `检测到 ${models.length} 个代码文件，填充主文件 ${sorted[0].uri}`);
-    return sorted[0];
   }
 
   function evalBaseline() {
@@ -169,16 +173,15 @@
         stopWith('已拒绝', A.blocked(), 'error', 'stop');
         return;
       }
-      report('准备中', '等待 Monaco 编辑器…', 'work');
-      let st = await waitState(tk, 25000);
-      if (!st?.ok) {
-        stopWith('未识别到题目', '未检测到 Monaco 编辑器，请刷新页面后重试', 'error', 'notfound');
+      report('准备中', '等待代码编辑器…', 'work');
+      let model = await findEditor(tk, 25000);
+      if (!model) {
+        stopWith('未识别到题目', '未找到 Monaco/Ace/CodeMirror 编辑器，请刷新页面后重试', 'error', 'notfound');
         return;
       }
 
       for (let guard = 0; guard < 50; guard += 1) {
         if (!running || tk !== token) return;
-        const model = pickModel(st);
         if (!model) {
           stopWith('未识别到题目', '代码编辑器为空', 'error', 'notfound');
           return;
@@ -215,11 +218,18 @@
             return;
           }
 
-          const wr = await send({ type: 'EDU_SET_CODE', uri: model.uri, code: ans.code });
+          const wr = await send({
+            type: 'EDU_SET_CODE',
+            frameId: editorFrameId,
+            editorId: model.id,
+            code: ans.code
+          });
           if (!wr?.ok) {
-            log('error', `写入 Monaco 失败：${wr?.error || '未知错误'}`);
+            log('error', `写入 ${editorType || '编辑器'} 失败：${wr?.error || '未知错误'}`);
             break;
           }
+          if (wr.id) model.id = wr.id;
+          model.value = ans.code;
           log('ok', `已写入代码（${wr.length} 字符）`);
 
           report('评测中', `第 ${passed + 1} 关 · 第 ${attempt}/${maxAttempts} 次`, 'work');
@@ -269,9 +279,9 @@
           return;
         }
         log('info', `已进入第 ${passed + 1} 关`);
-        st = await waitState(tk, 20000);
-        if (!st?.ok) {
-          stopWith('未识别到题目', '下一关未加载出 Monaco 编辑器', 'error', 'failed');
+        model = await findEditor(tk, 20000);
+        if (!model) {
+          stopWith('未识别到题目', '下一关未加载出代码编辑器', 'error', 'failed');
           return;
         }
       }

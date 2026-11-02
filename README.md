@@ -7,7 +7,7 @@
 <p align="center">在已打开的答题页面上自动识别整卷题目、调用大模型判题并填写答案 —— 不自动交卷。</p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-0.7.0-6D28D9" />
+  <img alt="version" src="https://img.shields.io/badge/version-0.7.1-6D28D9" />
   <img alt="manifest" src="https://img.shields.io/badge/Manifest-V3-2563EB" />
   <img alt="platform" src="https://img.shields.io/badge/Edge%20%7C%20Chrome-Side%20Panel-10B981" />
   <img alt="license" src="https://img.shields.io/badge/license-MIT-10B981" />
@@ -62,7 +62,7 @@
 
 ### 方式一：使用发布包（推荐）
 
-1. 下载安装包：[GitHub Release v0.7.0](https://github.com/kingdome55/Quizora/releases/download/v0.7.0/quizora-v0.7.0.zip)（备用：[仓库内 ZIP](release/quizora-v0.7.0.zip)）。
+1. 下载安装包：[GitHub Release v0.7.1](https://github.com/kingdome55/Quizora/releases/download/v0.7.1/quizora-v0.7.1.zip)（备用：[仓库内 ZIP](release/quizora-v0.7.1.zip)）。
 2. **完整解压**到一个固定目录，例如 `D:\Quizora\`。解压后该目录里应直接看到 `manifest.json`。
 3. 打开 `edge://extensions`（Chrome 为 `chrome://extensions`）。
 4. 打开右上角“开发人员模式”。
@@ -124,7 +124,7 @@ A：0.5.2 真机在最后一题报 `Illegal invocation`，0.5.3–0.6.0 已做�
 A：学习通 `font-cxsecret` 字体反爬。0.6.0 内置 Typr.js + 字形映射表，在扫描前解密题干与选项；日志出现“字体解密已就绪：N 个字形”即表示生效。若映射表未命中，会保留原文，不影响其他功能。
 
 **Q：头歌（EduCoder）怎么用？**  
-A：打开头歌任务页（可直接打开，也可在学习通内嵌页），确认不是考试页、关闭“演练模式”，点“开始”。插件读取左侧任务说明和右侧 Monaco 模板 → 生成完整代码 → 写入编辑器 → 点击“评测” → 未通过按报错重试（默认 3 次，自动等平台冷却）→ 通过后进入下一关；整页刷新后会自动续跑。考试页（URL 含 `/exam` 或页面出现“交卷/监考”）会被拒绝。
+A：打开头歌任务页（可直接打开，也可在学习通内嵌页），确认不是考试页、关闭“演练模式”，点“开始”。插件会跨 frame 识别编辑器类型（日志 `编辑器：monaco/ace/cm5/cm6 · frame#N`），读取左侧任务说明与代码模板 → 生成完整代码 → 写入编辑器 → 点击“评测” → 未通过按报错重试（默认 3 次，自动等平台冷却）→ 通过后进入下一关；整页刷新后会自动续跑。考试页（URL 含 `/exam` 或页面出现“交卷/监考”）会被拒绝。
 
 **Q：可以用于正式考试吗？**  
 A：不建议。自动答题可能违反平台规则，账号与成绩风险由使用者承担。项目不做风控规避，也不自动提交。
@@ -136,7 +136,7 @@ A：Key 仅存本机扩展存储，明文保存；不要在共用电脑上使用
 
 - Manifest V3（Service Worker + Side Panel + Content Scripts）
 - 原生 JavaScript / HTML / CSS，**无框架、零构建依赖**；仅内置字体解析所需的最小第三方库（见“第三方组件”）
-- 头歌代码编辑器为 Monaco：通过 `chrome.scripting` 在 MAIN world 读取/写入模型，绕过禁用粘贴的 DOM 限制
+- 头歌代码编辑器跨 frame 自动识别 Monaco / Ace / CodeMirror 5/6 / textarea / contenteditable：通过 `chrome.scripting` 在 MAIN world 读写，绕过禁用粘贴的 DOM 限制
 - OpenAI 兼容 Chat Completions 接口（支持 `image_url` 多模态）
 - `chrome.scripting`、`chrome.webNavigation`、`chrome.storage.local`
 
@@ -163,7 +163,7 @@ release/                 发布包（ZIP）
 Get-ChildItem -Recurse -File -Filter *.js | ForEach-Object { node --check $_.FullName }
 Get-Content manifest.json -Raw | ConvertFrom-Json | Out-Null
 
-# 生产构建（生成 dist/ 与 release/quizora-v0.7.0.zip）
+# 生产构建（生成 dist/ 与 release/quizora-v0.7.1.zip）
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 

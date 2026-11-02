@@ -1,6 +1,6 @@
 # 技术架构
 
-> 对应版本：0.7.0 · 所有路径相对 `wayground-auto/`
+> 对应版本：0.7.1 · 所有路径相对 `wayground-auto/`
 
 ## 1. 总体架构
 
@@ -37,13 +37,14 @@
 - **字体解密（cx-font.js）**：页面 `<style>` 内嵌 `font-cxsecret` TTF → `Typr.parse` → 对 CJK 码位算 `glyphToPath` 的 MD5 → 查 `cx-font-table.json` → 构建“替换码位 → 真实码位”映射；`cx-adapter.norm()` 在文本进入模型前解密，并同步改写 `.font-cxsecret` 文本节点。
 - **填空写入（cx-fill.js）**：`.XztiHover1` 是答案格（左侧 `span.tiankong` 只是“第 N 空”标签）→ 格内 `input.inp` 用原生 setter 写入；UEditor 先写同源编辑 iframe，再通过 background `WG_UE_FILL` 在 MAIN world 调 `UE.getEditor(name).setContent()+sync()`。
 
-### 1.2 头歌（EduCoder）编程链路（0.7.0）
+### 1.2 头歌（EduCoder）编程链路（0.7.0–0.7.1）
 
 - **站点**：`*.educoder.net` 直接打开，或作为学习通 `doHomeWorkNew` 内的跨域 iframe；两种形态都由静态内容脚本 `all_frames` 注入。
 - **edu-adapter.js（DOM 侧）**：读取左侧“任务描述”文本；按文本查找“评测 / 下一关”按钮；读取“测试结果”面板并按关键词判定通过/失败；几何+文本启发式，避免依赖具体 class。
-- **edu-main.js（流程侧）**：`EDU_STATE` 读取 Monaco 模型；`EDU_SOLVE` 调 `askCode` 生成完整代码；`EDU_SET_CODE` 经 background 在 MAIN world 执行 `model.setValue(code)`；点击评测 → 轮询结果 → 失败时把错误回传模型 → 等待按钮冷却 → 重试；通过后点击“下一关”。
+- **编辑器发现（0.7.1）**：`EDU_FIND_EDITOR` 用 `webNavigation.getAllFrames` 枚举所有 frame，逐帧在 MAIN world 扫描 Monaco / Ace / CodeMirror 5/6 / textarea / contenteditable，返回 `{type,id,frameId,language,value}`；真实页面常把编辑器放在子 iframe。
+- **edu-main.js（流程侧）**：`findEditor` 选择编辑器并记录 frameId；`EDU_SOLVE` 调 `askCode` 生成完整代码；`EDU_SET_CODE` 按 frameId 在 MAIN world 写入对应编辑器；点击评测 → 轮询结果 → 失败时把错误回传模型 → 等待按钮冷却 → 重试；通过后点击“下一关”。
 - **续跑**：`sessionStorage` 保存 `{settings, passed}`（不含 API Key）；整页刷新后自动继续。
-- **边界**：只在作业/练习页运行；URL 含 `/exam` 或页面出现“交卷/监考/考试剩余时间”时拒绝。当前只填充 Monaco 主文件。
+- **边界**：只在作业/练习页运行；URL 含 `/exam` 或页面出现“交卷/监考/考试剩余时间”时拒绝。当前只填充主编辑器；多文件任务暂不支持。
 
 关键边界：
 
