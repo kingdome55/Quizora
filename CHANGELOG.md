@@ -2,6 +2,30 @@
 
 本项目采用语义化版本。当前处于公开测试阶段（0.x），接口与行为仍可能调整。
 
+## [0.7.0] - 2026-11-02
+
+### Added
+
+- **头歌（EduCoder）编程作业模式**：适配左侧任务说明 + 右侧 Monaco 编辑器的作业页。
+  - 读取 Monaco 模型与语言，提取左侧任务描述，调用大模型生成完整代码。
+  - 通过 `chrome.scripting.executeScript({ world: 'MAIN' })` 读写 Monaco，绕过“禁止粘贴”的 DOM 限制。
+  - 点击“评测”，解析“测试结果”面板；未通过时把错误详情回传给模型修复，默认最多 3 次。
+  - 自动等待平台评测冷却；通过后点击“下一关/下一题/继续”，继续下一关。
+  - 整页刷新后用 `sessionStorage` 自动续跑。
+  - 考试页保护：URL 含 `/exam` 或页面出现“交卷/监考/考试剩余时间”时拒绝运行。
+- 新增 `src/content/edu-adapter.js`、`src/content/edu-main.js`；`sites.js` 与 manifest 增加 `*.educoder.net` 站点与静态内容脚本。
+
+### Changed
+
+- 后台新增 `EDU_STATE` / `EDU_SET_CODE` / `EDU_SOLVE` 消息；新增 `askCode` 代码生成提示词与 90 秒超时。
+- 评测失败结果会以 `WG_STOPPED reason=failed` 上报，面板显示“未通过”而不是“已填完”。
+- `scripts/build.ps1` 校验所有 content_scripts 条目，而不只是学习通条目。
+
+### Tested
+
+- 本地 headless Edge mock 覆盖 5 条路径：两关正常通过（含一次失败重试）、连续失败达到上限、演练模式、考试页拒绝、结果面板解析；全部符合预期。
+- 说明：真实头歌页面的按钮/结果文案仍需真机确认；当前只填充主代码文件。
+
 ## [0.6.0] - 2026-11-01
 
 ### Fixed

@@ -1,6 +1,6 @@
 import { getConfig, saveConfig } from './background/config.js';
 import { getCached, putCached, cacheStats, clearCache } from './background/cache.js';
-import { askLLM, askExam } from './background/llm.js';
+import { askLLM, askExam, askCode } from './background/llm.js';
 import { siteForUrl, isReadOnlyUrl } from './background/sites.js';
 import { pickFrame, pickFrames, clearFrame } from './background/frame.js';
 
@@ -52,8 +52,9 @@ async function selfCheck(tab) {
       target: { tabId: tab.id, allFrames: true },
       func: () => ({
         url: String(location.href).slice(0, 140),
-        hasAdapter: Boolean(window.__wg?.cxAdapter),
-        hasMain: Boolean(window.__wg?.cxMain),
+        hasAdapter: Boolean(window.__wg?.cxAdapter || window.__wg?.eduAdapter),
+        hasMain: Boolean(window.__wg?.cxMain || window.__wg?.eduMain),
+        hasEdu: Boolean(window.__wg?.eduMain),
         version: (() => {
           try {
             return chrome.runtime.getManifest().version;
@@ -111,6 +112,9 @@ async function startRun(tabIdArg) {
   if (site.id === 'chaoxing' && isReadOnlyUrl(tab.url)) {
     return { ok: false, error: '当前是作业/考试查看页，不能作答；请进入“做作业/开始作答”页面' };
   }
+  if (site.id === 'educoder' && /\/exam\b/i.test(new URL(tab.url).pathname)) {
+    return { ok: false, error: '头歌考试页不自动作答；仅支持练习/作业关卡' };
+  }
   if (run.running) await stopRun();
   pushLog('info', '正在启动…');
   try {
@@ -162,7 +166,8 @@ async function startRun(tabIdArg) {
       frames: new Map(started.map((f, i) => [f.frameId, { label: `任务点${i + 1}`, count: f.count }])),
       totalFrames: started.length,
       anyFilled: false,
-      anyDone: false
+      anyDone: false,
+      anyFailed: false
     };
     const totalCount = started.reduce((sum, f) => sum + (f.count || 0), 0);
     lastState = {
@@ -181,9 +186,10 @@ async function startRun(tabIdArg) {
 }
 
 async function stopRun() {
-  if (run.tabId) {
+  const tabId = run.tabId || (await resolveTab())?.id;
+  if (tabId) {
     try {
-      await chrome.tabs.sendMessage(run.tabId, { type: 'WG_STOP' });
+      await chrome.tabs.sendMessage(tabId, { type: 'WG_STOP' });
     } catch {}
   }
   resetRun('已停止');
@@ -371,6 +377,78 @@ async function handle(msg, sender) {
       }
       return res;
     }
+    case 'EDU_STATE': {
+      const tabId = sender?.tab?.id;
+      if (!tabId) return { ok: false, error: '缺少标签页' };
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId, frameIds: [sender.frameId ?? 0] },
+          world: 'MAIN',
+          func: () => {
+            const monaco = window.monaco;
+            if (!monaco?.editor?.getModels) return { ok: false, error: 'Monaco 未加载' };
+            try {
+              const models = monaco.editor.getModels().map((m) => ({
+                uri: String(m.uri),
+                language: m.getLanguageId ? m.getLanguageId() : '',
+                value: m.getValue()
+              }));
+              return {
+                ok: true,
+                models,
+                taskId: window.taskId || '',
+                paths: window.taskChallengePath || '',
+                url: location.href
+              };
+            } catch (e) {
+              return { ok: false, error: String(e?.message || e) };
+            }
+          }
+        });
+        return results?.[0]?.result || { ok: false, error: '无返回' };
+      } catch (e) {
+        return { ok: false, error: String(e?.message || e) };
+      }
+    }
+    case 'EDU_SET_CODE': {
+      const tabId = sender?.tab?.id;
+      if (!tabId || typeof msg.code !== 'string') return { ok: false, error: '缺少代码' };
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId, frameIds: [sender.frameId ?? 0] },
+          world: 'MAIN',
+          func: (uri, code) => {
+            const monaco = window.monaco;
+            const models = monaco?.editor?.getModels?.() || [];
+            if (!models.length) return { ok: false, error: '未找到代码模型' };
+            let model = uri ? models.find((m) => String(m.uri) === uri) : null;
+            if (!model) model = models.slice().sort((a, b) => b.getValue().length - a.getValue().length)[0];
+            try {
+              model.setValue(code);
+              return { ok: true, uri: String(model.uri), length: model.getValue().length };
+            } catch (e) {
+              return { ok: false, error: String(e?.message || e) };
+            }
+          },
+          args: [String(msg.uri || ''), msg.code]
+        });
+        return results?.[0]?.result || { ok: false, error: '无返回' };
+      } catch (e) {
+        return { ok: false, error: String(e?.message || e) };
+      }
+    }
+    case 'EDU_SOLVE': {
+      const config = await getConfig();
+      const payload = msg.payload || {};
+      return askCode({
+        config,
+        title: payload.title,
+        description: payload.description,
+        language: payload.language,
+        code: payload.code,
+        error: payload.error
+      });
+    }
     case 'WG_FONT_TABLE': {
       try {
         const res = await fetch(chrome.runtime.getURL('src/vendor/cx-font-table.json'));
@@ -431,8 +509,9 @@ async function handle(msg, sender) {
       const frameInfo = run.frames?.get?.(sender?.frameId);
       if (!frameInfo) return { ok: true };
       run.frames.delete(sender.frameId);
-      if (msg.reason === 'filled' || msg.reason === 'done') run.anyFilled = true;
+      if (msg.reason === 'filled' || msg.reason === 'done' || msg.reason === 'failed') run.anyFilled = true;
       if (msg.reason === 'done') run.anyDone = true;
+      if (msg.reason === 'failed') run.anyFailed = true;
 
       const remaining = run.frames.size;
       if (remaining > 0) {
@@ -448,12 +527,13 @@ async function handle(msg, sender) {
 
       run.running = false;
       const done = run.anyDone;
+      const failed = run.anyFailed;
       const filled = run.anyFilled;
       const notfound = !done && !filled && msg.reason === 'notfound';
       lastState = {
-        status: done ? '已完成' : filled ? '已填完' : notfound ? '未识别到题目' : '已停止',
-        detail: notfound ? lastState.detail || '' : `${run.totalFrames || 1} 个任务点`,
-        tone: done || filled ? 'ok' : notfound ? 'error' : 'idle',
+        status: done ? '已完成' : failed ? '未通过' : filled ? '已填完' : notfound ? '未识别到题目' : '已停止',
+        detail: notfound ? lastState.detail || '' : `${run.totalFrames || 1} 个任务点${failed ? '（有未通过关卡）' : ''}`,
+        tone: failed ? 'warn' : done || filled ? 'ok' : notfound ? 'error' : 'idle',
         site: run.site || lastState.site
       };
       broadcast({ type: 'STATE', state: lastState });

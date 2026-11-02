@@ -56,8 +56,10 @@ foreach ($rel in $required) {
 foreach ($iconRel in $manifest.icons.PSObject.Properties.Value) {
   if (-not (Test-Path (Join-Path $stage $iconRel))) { throw "manifest 引用的图标不存在：$iconRel" }
 }
-foreach ($fileRel in $manifest.content_scripts[0].js) {
-  if (-not (Test-Path (Join-Path $stage $fileRel))) { throw "manifest 引用的内容脚本不存在：$fileRel" }
+foreach ($cs in $manifest.content_scripts) {
+  foreach ($fileRel in $cs.js) {
+    if (-not (Test-Path (Join-Path $stage $fileRel))) { throw "manifest 引用的内容脚本不存在：$fileRel" }
+  }
 }
 
 # 3) 语法检查（有 node 时执行）

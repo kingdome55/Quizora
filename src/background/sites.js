@@ -27,6 +27,12 @@ export const SITES = {
     ],
     match: (u) => /(^|\.)chaoxing\.com$/i.test(u.hostname)
   },
+  educoder: {
+    id: 'educoder',
+    label: '头歌',
+    files: ['src/content/hud.js', 'src/content/edu-adapter.js', 'src/content/edu-main.js'],
+    match: (u) => /(^|\.)educoder\.net$/i.test(u.hostname)
+  },
   generic: {
     id: 'generic',
     label: '通用网页',

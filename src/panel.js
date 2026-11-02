@@ -70,7 +70,8 @@ async function refresh() {
     }
     $('cacheCount').textContent = res.cache?.count ?? 0;
     if (res.site) {
-      $('siteName').textContent = res.site === 'chaoxing' ? '学习通' : 'Wayground';
+      const labels = { chaoxing: '学习通', wayground: 'Wayground', educoder: '头歌', generic: '通用网页' };
+      $('siteName').textContent = labels[res.site] || res.site;
     }
     applyState(res.state);
   } catch {}

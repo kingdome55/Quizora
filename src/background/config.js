@@ -7,7 +7,8 @@ export const DEFAULT_CONFIG = {
   dryRun: true,
   examSkipAnswered: true,
   useCache: true,
-  examScrollLoad: true
+  examScrollLoad: true,
+  eduMaxAttempts: 3
 };
 
 const KEY = 'wg_config_v1';

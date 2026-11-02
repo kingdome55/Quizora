@@ -18,6 +18,15 @@ const EXAM_PROMPT = `你是严谨的考试答题助手，根据题型、题干�
 - 计算/电路/图片题：先结合图片完成计算，只给最终结果；
 - 不确定时给出最可能的答案，并把 confidence 调低。`;
 
+const CODE_PROMPT = `你是资深编程作业代码生成器，目标是通过头歌（EduCoder）平台的自动评测。
+只输出完整、可直接运行的代码，不要解释，不要输出 Markdown 代码块围栏。
+必须保留代码模板中的全部结构、函数签名、已有导入和注释标记（如 #代码开始 / #代码结束 / // BEGIN / // END）。
+按任务说明一次性完成所有小题，不要只实现第一题。
+严格遵循题目要求的输出格式、列名、列顺序、分隔符、函数名与参数。
+不要引入未安装的第三方依赖，不要写伪代码、TODO 或省略号。
+如果是 SQL，按题目顺序写完整查询语句，保留模板中的题号注释。
+如果是算法/编程题，确保能编译运行，并覆盖常见边界情况。`;
+
 const TYPE_LABELS = {
   single: '单选题',
   multiple: '多选题',
@@ -96,11 +105,11 @@ function buildExamMessages({ question, type, options, blankCount, images = [] })
   ];
 }
 
-async function callChat({ config, messages, jsonMode, temperature = 0 }) {
+async function callChat({ config, messages, jsonMode, temperature = 0, timeoutMs = 20000 }) {
   const url = endpoint(config.baseUrl);
   if (!url) throw new Error('API Base URL 为空');
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const body = {
     model: config.model || 'deepseek-chat',
     temperature,
@@ -242,6 +251,55 @@ export async function askLLM({ config, question, options = [], kind = 'mc' }) {
     messages: buildMessages(question, options, kind),
     validate: (parsed) => normalize(parsed, options.length, kind)
   });
+}
+
+function stripCode(raw) {
+  let text = String(raw || '').trim();
+  const fence = text.match(/```[a-zA-Z0-9+#._-]*\s*([\s\S]*?)```/);
+  if (fence) text = fence[1].trim();
+  text = text.replace(/^(以下是|下面是)?(完整)?(代码|答案)[：:]\s*/i, '').trim();
+  return text;
+}
+
+export async function askCode({ config, title = '', description = '', language = '', code = '', error = '' }) {
+  if (!config?.apiKey) return { ok: false, error: '未填写 API Key' };
+  if (!config?.baseUrl) return { ok: false, error: '未填写 API Base URL' };
+  if (!description && !code) return { ok: false, error: '任务说明与代码模板均为空' };
+
+  const lines = [`语言：${language || '未知'}`];
+  if (title) lines.push(`任务标题：${title}`);
+  if (description) lines.push(`任务说明：\n${String(description).slice(0, 12000)}`);
+  if (code) lines.push(`当前代码模板：\n${String(code).slice(0, 12000)}`);
+  if (error) {
+    lines.push(`上一次评测未通过，平台返回：\n${String(error).slice(0, 2500)}`);
+    lines.push('请针对错误修复，并输出完整代码。');
+  }
+  lines.push('请输出完整代码（覆盖整个文件），不要只输出新增片段。');
+
+  const messages = [
+    { role: 'system', content: CODE_PROMPT },
+    { role: 'user', content: lines.join('\n\n') }
+  ];
+
+  let lastError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const raw = await callChat({ config, messages, jsonMode: false, temperature: 0.1, timeoutMs: 90000 });
+      const out = stripCode(raw);
+      if (!out) throw new Error('模型返回空代码');
+      if (out.length < 4 || /^(抱歉|无法|我不能|很抱歉)/.test(out)) throw new Error('模型拒绝生成代码');
+      return { ok: true, code: out, confidence: 0.85, reason: `生成 ${out.length} 字符` };
+    } catch (e) {
+      lastError = e;
+      if (e.status === 401 || e.status === 403) {
+        return { ok: false, error: `Key 无效或无权限（HTTP ${e.status}）` };
+      }
+      if (e.status === 404) return { ok: false, error: '接口地址不存在，请检查 Base URL' };
+      if (attempt === 0) await sleep(1500);
+    }
+  }
+  const reason = lastError?.name === 'AbortError' ? '代码生成超时' : lastError?.message || '代码生成失败';
+  return { ok: false, error: reason };
 }
 
 export async function askExam({ config, question, type = 'single', options = [], blankCount = 0, images = [] }) {
