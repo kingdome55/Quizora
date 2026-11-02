@@ -25,12 +25,23 @@
     send({ type: 'WG_LOG', level, text });
   }
 
+  function setBadge(active) {
+    const el = document.getElementById('__wg_edu_badge');
+    if (!el) return;
+    el.innerHTML =
+      '<div style="font-weight:600;color:#fff">题灵 · 头歌（EduCoder）</div>' +
+      '<div style="font-size:11px;color:#b9b3d4;margin-top:2px">' +
+      (active ? '自动答题运行中（实验）' : '粘贴已解锁 · 自动答题可用（实验）') +
+      '</div>';
+  }
+
   function report(status, detail, tone = 'work') {
-    const key = `${status}|${detail}|${tone}`;
+    const shown = detail ? `头歌 · ${detail}` : '头歌';
+    const key = `${status}|${shown}|${tone}`;
     if (key === lastReport) return;
     lastReport = key;
-    H?.set({ status, detail, tone });
-    send({ type: 'WG_STATE', state: { status, detail, question: passed + 1, tone } });
+    H?.set({ status, detail: shown, tone });
+    send({ type: 'WG_STATE', state: { status, detail: shown, question: passed + 1, tone } });
   }
 
   function saveRun() {
@@ -49,8 +60,10 @@
     running = false;
     token += 1;
     clearRun();
-    H?.set({ status: '已停止', detail: reason || '', tone: 'idle' });
-    send({ type: 'WG_STATE', state: { status: '已停止', detail: reason || '', tone: 'idle' } });
+    setBadge(false);
+    const shown = reason ? `头歌 · ${reason}` : '头歌';
+    H?.set({ status: '已停止', detail: shown, tone: 'idle' });
+    send({ type: 'WG_STATE', state: { status: '已停止', detail: shown, tone: 'idle' } });
     send({ type: 'WG_STOPPED', reason: 'stop' });
     log('warn', `停止：${reason || ''}`);
   }
@@ -59,20 +72,24 @@
     running = false;
     token += 1;
     clearRun();
-    H?.set({ status, detail, tone });
-    send({ type: 'WG_STATE', state: { status, detail, question: passed, tone } });
+    setBadge(false);
+    const shown = `头歌 · ${detail}`;
+    H?.set({ status, detail: shown, tone });
+    send({ type: 'WG_STATE', state: { status, detail: shown, question: passed, tone } });
     send({ type: 'WG_STOPPED', reason });
-    log(tone === 'error' ? 'error' : 'warn', `${status}：${detail}`);
+    log(tone === 'error' ? 'error' : 'warn', `${status}：${shown}`);
   }
 
   function finish(detail) {
     running = false;
     token += 1;
     clearRun();
-    H?.set({ status: '已完成', detail, tone: 'ok' });
-    send({ type: 'WG_STATE', state: { status: '已完成', detail, question: passed, total: passed, tone: 'ok' } });
+    setBadge(false);
+    const shown = `头歌 · ${detail}`;
+    H?.set({ status: '已完成', detail: shown, tone: 'ok' });
+    send({ type: 'WG_STATE', state: { status: '已完成', detail: shown, question: passed, total: passed, tone: 'ok' } });
     send({ type: 'WG_STOPPED', reason: 'done' });
-    log('ok', detail);
+    log('ok', shown);
   }
 
   let editorFrameId = null;
@@ -470,11 +487,12 @@
     lastReport = '';
     saveRun();
     H.ensure();
+    setBadge(true);
     H.onStop(() => {
       if (running) stop('用户点击 HUD');
     });
-    report('准备中', '正在读取任务与 Monaco…', 'work');
-    log('info', '头歌编程模式启动（自动生成、写入、评测、进入下一关；不用于考试）');
+    report('准备中', '正在读取任务与编辑器…', 'work');
+    log('info', '头歌（EduCoder）自动答题启动（实验；同页粘贴已解锁）');
     run(token);
   }
 

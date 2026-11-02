@@ -7,7 +7,7 @@
 <p align="center">在已打开的答题页面上自动识别整卷题目、调用大模型判题并填写答案 —— 不自动交卷。</p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-0.7.3-6D28D9" />
+  <img alt="version" src="https://img.shields.io/badge/version-0.7.4-6D28D9" />
   <img alt="manifest" src="https://img.shields.io/badge/Manifest-V3-2563EB" />
   <img alt="platform" src="https://img.shields.io/badge/Edge%20%7C%20Chrome-Side%20Panel-10B981" />
   <img alt="license" src="https://img.shields.io/badge/license-MIT-10B981" />
@@ -17,19 +17,19 @@
 
 ![侧边栏：识别 11 题](docs/images/screenshot-panel.png)
 
-> 截图为 0.5.2 学习通混合卷实测：识别 11 题（单选×5 / 多选×5 / 简答×1），完成 10 道客观题。0.6.0 改为按学习通真实填空结构 `.XztiHover1` 写入并内置 `font-cxsecret` 字体解密；0.7.3 起头歌改为“粘贴解锁”，不再自动生成代码。
+> 截图为 0.5.2 学习通混合卷实测：识别 11 题（单选×5 / 多选×5 / 简答×1），完成 10 道客观题。0.6.0 改为按学习通真实填空结构 `.XztiHover1` 写入并内置 `font-cxsecret` 字体解密；0.7.4 恢复头歌自动答题（实验），同时保留 0.7.3 的粘贴解锁与平台标识。
 
 ## 简介
 
 题灵（Quizora）是一个基于 **Manifest V3** 的 Edge / Chrome 浏览器扩展。它不依赖刷新页面，直接接管**当前已经打开**的答题页：扫描整页题目 → 调用你配置的大模型判题 → 自动点击选项或写入填空/简答 → 你在确认后手动提交。
 
-项目最初为 Wayground 实时对局而写，后扩展到学习通整卷（练习/作业/章节测验）、头歌（EduCoder）粘贴解锁与任意可作答网页。
+项目最初为 Wayground 实时对局而写，后扩展到学习通整卷（练习/作业/章节测验）、头歌（EduCoder）自动答题与粘贴解锁、以及任意可作答网页。
 
 ## 核心功能
 
 - **整卷扫描**：一次识别页面上的全部题目，而不是只处理当前一题。
 - **结构无关识别**：容器选择器 + 题型标签 + `typeName` 属性 + 答题控件反推，多路合并去重。
-- **头歌粘贴解锁**：页面加载时改写任务 API 的 `copy`/`forbid_copy` 标志，并清理 `onpaste`/`user-select` 限制，让编辑器直接接受你粘贴的代码；不自动生成、不自动评测。
+- **头歌（EduCoder）自动答题（实验）+ 粘贴解锁**：点“开始”可自动生成/写入/评测并进入下一关；同时页面加载时已改写任务 API 的 copy 标志并清理 `onpaste`，自动答题失败也能直接粘贴自己的代码手动评测。侧边栏显示“头歌（EduCoder） / 自动答题（实验）+ 粘贴解锁”，页面右上角有平台徽标。
 - **多题型支持**：单选、多选、判断、填空（多空）、简答/论述/名词解释。
 - **图片题**：题目内图片可随题干一起发送给视觉模型（最多 2 张，长边 1024）。
 - **大模型判题**：兼容 OpenAI 接口，默认 DeepSeek；支持自定义 Base URL、模型与 Key。
@@ -62,7 +62,7 @@
 
 ### 方式一：使用发布包（推荐）
 
-1. 下载安装包：[GitHub Release v0.7.3](https://github.com/kingdome55/Quizora/releases/download/v0.7.3/quizora-v0.7.3.zip)（备用：[仓库内 ZIP](release/quizora-v0.7.3.zip)）。
+1. 下载安装包：[GitHub Release v0.7.4](https://github.com/kingdome55/Quizora/releases/download/v0.7.4/quizora-v0.7.4.zip)（备用：[仓库内 ZIP](release/quizora-v0.7.4.zip)）。
 2. **完整解压**到一个固定目录，例如 `D:\Quizora\`。解压后该目录里应直接看到 `manifest.json`。
 3. 打开 `edge://extensions`（Chrome 为 `chrome://extensions`）。
 4. 打开右上角“开发人员模式”。
@@ -124,7 +124,7 @@ A：0.5.2 真机在最后一题报 `Illegal invocation`，0.5.3–0.6.0 已做�
 A：学习通 `font-cxsecret` 字体反爬。0.6.0 内置 Typr.js + 字形映射表，在扫描前解密题干与选项；日志出现“字体解密已就绪：N 个字形”即表示生效。若映射表未命中，会保留原文，不影响其他功能。
 
 **Q：头歌（EduCoder）怎么用？**  
-A：打开头歌任务页（可直接打开，也可在学习通内嵌页），插件会自动解除粘贴限制。日志出现“头歌：粘贴限制已解除”后，直接在右侧编辑器粘贴你的代码，手动点“评测”即可；不自动生成、不自动评测。考试页（URL 含 `/exam`）不会解锁。
+A：打开头歌任务页（可直接打开，也可在学习通内嵌页）。插件会同时做两件事：① 自动解除粘贴限制；② 在侧边栏点“开始”运行自动答题（实验）。日志出现“头歌（EduCoder）已识别”后，你可以直接粘贴自己的代码手动评测；也可以点“开始”让插件自动生成/评测/进入下一关。侧边栏“站点”显示头歌（EduCoder）、“模式”显示自动答题（实验）+ 粘贴解锁。考试页（URL 含 `/exam`）既不自动作答也不解锁粘贴。
 
 **Q：可以用于正式考试吗？**  
 A：不建议。自动答题可能违反平台规则，账号与成绩风险由使用者承担。项目不做风控规避，也不自动提交。
@@ -136,7 +136,7 @@ A：Key 仅存本机扩展存储，明文保存；不要在共用电脑上使用
 
 - Manifest V3（Service Worker + Side Panel + Content Scripts）
 - 原生 JavaScript / HTML / CSS，**无框架、零构建依赖**；仅内置字体解析所需的最小第三方库（见“第三方组件”）
-- 头歌粘贴解锁：`document_start` 的 MAIN world 脚本 hook `fetch`，改写任务 API 的 copy 标志；同时清理 `onpaste` 与 `user-select`，兼容 Monaco / CodeMirror 等编辑器
+- 头歌双能力：`document_start` 的 MAIN world 脚本 hook `fetch` 改写任务 API copy 标志并清理 `onpaste/user-select`；`document_idle` 的 `edu-main` 负责自动答题（Monaco/DOM 编辑器读写、评测、下一关、刷新续跑）
 - OpenAI 兼容 Chat Completions 接口（支持 `image_url` 多模态）
 - `chrome.scripting`、`chrome.webNavigation`、`chrome.storage.local`
 
@@ -163,7 +163,7 @@ release/                 发布包（ZIP）
 Get-ChildItem -Recurse -File -Filter *.js | ForEach-Object { node --check $_.FullName }
 Get-Content manifest.json -Raw | ConvertFrom-Json | Out-Null
 
-# 生产构建（生成 dist/ 与 release/quizora-v0.7.3.zip）
+# 生产构建（生成 dist/ 与 release/quizora-v0.7.4.zip）
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 

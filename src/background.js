@@ -301,20 +301,9 @@ async function startRun(tabIdArg) {
     return { ok: false, error: '当前是作业/考试查看页，不能作答；请进入“做作业/开始作答”页面' };
   }
   if (site.id === 'educoder' && /\/exam\b/i.test(new URL(tab.url).pathname)) {
-    return { ok: false, error: '头歌考试页不自动作答；仅支持练习/作业关卡' };
+    return { ok: false, error: '头歌考试页不解锁粘贴，也不自动作答；仅支持练习/作业关卡' };
   }
   if (run.running) await stopRun();
-  if (site.id === 'educoder') {
-    lastState = {
-      status: '头歌粘贴模式',
-      detail: '粘贴限制已解除：请直接在编辑器粘贴代码并手动评测',
-      tone: 'ok',
-      site: 'educoder'
-    };
-    pushLog('ok', '头歌：粘贴限制已解除，请直接粘贴代码并手动评测');
-    broadcast({ type: 'STATE', state: lastState });
-    return { ok: true, site: 'educoder', siteLabel: '头歌', pasteOnly: true };
-  }
   pushLog('info', '正在启动…');
   try {
     const multi = site.id === 'chaoxing';
@@ -407,38 +396,6 @@ async function probe(tabIdArg) {
   const site = siteForUrl(tab.url);
   if (!site) return { ok: false, error: '当前标签页不是支持的对局或考试页' };
   pushLog('info', '正在探测页面…');
-  if (site.id === 'educoder') {
-    return {
-      ok: true,
-      site: 'educoder',
-      siteLabel: '头歌',
-      snapshot: {
-        mode: 'exam',
-        site: 'educoder',
-        url: tab.url,
-        count: 1,
-        types: { paste: 1 },
-        questions: [
-          {
-            index: 0,
-            type: 'paste',
-            stem: '头歌粘贴解锁',
-            options: [],
-            blanks: 0,
-            hasEditor: true,
-            images: 0,
-            answered: false
-          }
-        ],
-        hasEditor: true,
-        hasEvaluate: false,
-        hasNext: false,
-        blocked: false,
-        buttons: [],
-        result: ''
-      }
-    };
-  }
   try {
     const picked = await pickFrame(tab, site.files);
     let check = null;
@@ -712,12 +669,12 @@ async function handle(msg, sender) {
     }
     case 'EDU_PASTE_READY': {
       lastState = {
-        status: '头歌粘贴模式',
-        detail: '粘贴限制已解除：请直接在编辑器粘贴代码并手动评测',
+        status: '头歌（EduCoder）',
+        detail: '粘贴已解锁；点“开始”可自动答题（实验），也可直接粘贴代码手动评测',
         tone: 'ok',
         site: 'educoder'
       };
-      pushLog('ok', '头歌：粘贴限制已解除，可直接粘贴代码');
+      pushLog('ok', '头歌（EduCoder）已识别：粘贴已解锁；可点“开始”自动答题（实验）');
       broadcast({ type: 'STATE', state: lastState });
       return { ok: true };
     }

@@ -29,8 +29,8 @@ export const SITES = {
   },
   educoder: {
     id: 'educoder',
-    label: '头歌',
-    files: [],
+    label: '头歌（EduCoder）',
+    files: ['src/content/hud.js', 'src/content/edu-adapter.js', 'src/content/edu-main.js'],
     match: (u) => /(^|\.)educoder\.net$/i.test(u.hostname)
   },
   generic: {

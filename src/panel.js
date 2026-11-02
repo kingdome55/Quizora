@@ -3,6 +3,19 @@ let initialized = false;
 let port = null;
 let pillLockUntil = 0;
 
+const SITE_LABELS = {
+  chaoxing: '学习通',
+  wayground: 'Wayground',
+  educoder: '头歌（EduCoder）',
+  generic: '通用网页'
+};
+const SITE_MODES = {
+  chaoxing: '整卷答题',
+  wayground: '单题答题',
+  educoder: '自动答题（实验）+ 粘贴解锁',
+  generic: '通用网页'
+};
+
 function fmtTime(ts) {
   const d = new Date(ts || Date.now());
   return d.toLocaleTimeString('zh-CN', { hour12: false });
@@ -70,8 +83,8 @@ async function refresh() {
     }
     $('cacheCount').textContent = res.cache?.count ?? 0;
     if (res.site) {
-      const labels = { chaoxing: '学习通', wayground: 'Wayground', educoder: '头歌', generic: '通用网页' };
-      $('siteName').textContent = labels[res.site] || res.site;
+      $('siteName').textContent = SITE_LABELS[res.site] || res.site;
+      $('siteMode').textContent = SITE_MODES[res.site] || '—';
     }
     applyState(res.state);
   } catch {}
@@ -237,7 +250,12 @@ $('startBtn').addEventListener('click', async () => {
     await saveConfig({ notify: false });
     const res = await chrome.runtime.sendMessage({ type: 'START' });
     if (!res?.ok) throw new Error(res?.error || '启动失败');
-    if (res.siteLabel) $('siteName').textContent = res.siteLabel;
+    if (res.site) {
+      $('siteName').textContent = SITE_LABELS[res.site] || res.siteLabel || res.site;
+      $('siteMode').textContent = SITE_MODES[res.site] || '—';
+    } else if (res.siteLabel) {
+      $('siteName').textContent = res.siteLabel;
+    }
     setPill('运行中', 'work');
   } catch (e) {
     fail(e);
@@ -259,7 +277,12 @@ $('probeBtn').addEventListener('click', async () => {
     const res = await chrome.runtime.sendMessage({ type: 'PROBE' });
     if (!res?.ok) throw new Error(res?.error || '探测失败');
     renderSnapshot(res.snapshot);
-    if (res.siteLabel) $('siteName').textContent = res.siteLabel;
+    if (res.site) {
+      $('siteName').textContent = SITE_LABELS[res.site] || res.siteLabel || res.site;
+      $('siteMode').textContent = SITE_MODES[res.site] || '—';
+    } else if (res.siteLabel) {
+      $('siteName').textContent = res.siteLabel;
+    }
     if (!res.snapshot) {
       addLog({ level: 'warn', text: '未取到页面快照：内容脚本没有响应，请查看上方的“脚本注入/自检”日志', ts: Date.now() });
       setPill('未识别到题目', 'warn');

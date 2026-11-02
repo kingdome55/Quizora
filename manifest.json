@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "题灵",
   "short_name": "题灵",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "题灵（Quizora）：Wayground/Quizizz、学习通、头歌编程作业与通用网页自动答题助手，整卷扫描 + 大模型判题 + 可调节奏。",
   "permissions": [
     "scripting",
@@ -56,6 +56,18 @@
       "match_about_blank": true,
       "match_origin_as_fallback": true,
       "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.educoder.net/*"],
+      "js": [
+        "src/content/hud.js",
+        "src/content/edu-adapter.js",
+        "src/content/edu-main.js"
+      ],
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true,
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
