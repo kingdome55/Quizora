@@ -78,6 +78,175 @@
   let editorFrameId = null;
   let editorType = '';
 
+  function scanRoots() {
+    const roots = [];
+    const docs = [document];
+    const visitDoc = (doc) => {
+      try {
+        for (const f of doc.querySelectorAll('iframe')) {
+          try {
+            const d = f.contentDocument;
+            if (d) {
+              docs.push(d);
+              visitDoc(d);
+            }
+          } catch {}
+        }
+      } catch {}
+    };
+    visitDoc(document);
+    for (const doc of docs) {
+      roots.push(doc);
+      const visitShadow = (root) => {
+        try {
+          for (const el of root.querySelectorAll('*')) {
+            if (el.shadowRoot) {
+              roots.push(el.shadowRoot);
+              visitShadow(el.shadowRoot);
+            }
+          }
+        } catch {}
+      };
+      visitShadow(doc);
+    }
+    return roots;
+  }
+
+  function pickEditor(selector) {
+    let best = null;
+    for (const root of scanRoots()) {
+      let nodes = [];
+      try {
+        nodes = [...root.querySelectorAll(selector)];
+      } catch {
+        continue;
+      }
+      for (const el of nodes) {
+        let rect;
+        try {
+          rect = el.getBoundingClientRect();
+        } catch {
+          continue;
+        }
+        if (rect.width < 120 || rect.height < 50) continue;
+        const area = rect.width * rect.height;
+        if (!best || area > best.area) best = { el, area };
+      }
+    }
+    return best?.el || null;
+  }
+
+  function readEditor(type, el) {
+    const valueEl =
+      type === 'dom-cm6'
+        ? el.querySelector('.cm-content')
+        : type === 'dom-monaco'
+          ? el.querySelector('.view-lines')
+          : type === 'dom-ace'
+            ? el.querySelector('.ace_content')
+            : type === 'dom-cm5'
+              ? el.querySelector('.CodeMirror-code')
+              : el;
+    return String(valueEl?.innerText || valueEl?.value || valueEl?.textContent || '');
+  }
+
+  function domFind() {
+    const tries = [
+      ['.monaco-editor', 'dom-monaco'],
+      ['.cm-editor', 'dom-cm6'],
+      ['.ace_editor', 'dom-ace'],
+      ['.CodeMirror', 'dom-cm5'],
+      ['textarea', 'dom-textarea'],
+      ['[contenteditable="true"]', 'dom-editable']
+    ];
+    for (const [selector, type] of tries) {
+      const el = pickEditor(selector);
+      if (!el) continue;
+      const value = readEditor(type, el);
+      return { ok: true, url: location.href, editor: { type, id: type, language: '', value, length: value.length } };
+    }
+    return { ok: false, error: '当前 frame 未找到编辑器' };
+  }
+
+  async function domSet(type, code) {
+    const selector = {
+      'dom-monaco': '.monaco-editor',
+      'dom-cm6': '.cm-editor',
+      'dom-ace': '.ace_editor',
+      'dom-cm5': '.CodeMirror',
+      'dom-textarea': 'textarea',
+      'dom-editable': '[contenteditable="true"]'
+    }[type];
+    if (!selector) return { ok: false, error: `未知的 DOM 编辑器类型：${type}` };
+    const el = pickEditor(selector);
+    if (!el) return { ok: false, error: '未找到编辑器容器' };
+    const target =
+      type === 'dom-monaco'
+        ? el.querySelector('textarea.inputarea') || el.querySelector('.view-lines') || el
+        : type === 'dom-cm6'
+          ? el.querySelector('.cm-content') || el
+          : type === 'dom-ace'
+            ? el.querySelector('.ace_text-input') || el.querySelector('.ace_content') || el
+            : type === 'dom-cm5'
+              ? el.querySelector('textarea') || el.querySelector('.CodeMirror-code') || el
+              : el;
+    const doc = target.ownerDocument || document;
+    try {
+      target.scrollIntoView({ block: 'center', inline: 'center' });
+    } catch {}
+    for (const t of ['pointerdown', 'mousedown', 'mouseup', 'click']) {
+      try {
+        target.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: doc.defaultView || window }));
+      } catch {}
+    }
+    try {
+      target.focus();
+    } catch {}
+    await sleep(120);
+    try {
+      target.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'a', code: 'KeyA', ctrlKey: true, bubbles: true, cancelable: true })
+      );
+      target.dispatchEvent(
+        new KeyboardEvent('keyup', { key: 'a', code: 'KeyA', ctrlKey: true, bubbles: true, cancelable: true })
+      );
+    } catch {}
+    try {
+      doc.execCommand('selectAll', false, null);
+    } catch {}
+    let inserted = false;
+    try {
+      inserted = doc.execCommand('insertText', false, code);
+    } catch {}
+    if (!inserted) {
+      try {
+        const dt = new DataTransfer();
+        dt.setData('text/plain', code);
+        target.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      } catch {}
+    }
+    const active = doc.activeElement;
+    if (active && active.tagName === 'TEXTAREA') {
+      try {
+        const win = active.ownerDocument.defaultView || window;
+        const setter = Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement.prototype, 'value')?.set;
+        if (setter) setter.call(active, code);
+        else active.value = code;
+        active.dispatchEvent(new Event('input', { bubbles: true }));
+        active.dispatchEvent(new Event('change', { bubbles: true }));
+        inserted = true;
+      } catch {}
+    }
+    await sleep(180);
+    const value = readEditor(type, el);
+    return {
+      ok: value.length > 0,
+      length: value.length,
+      inserted,
+      active: active ? `${active.tagName}.${String(active.className || '')}` : ''
+    };
+  }
+
   async function findEditor(tk, timeout = 25000) {
     const start = Date.now();
     while (Date.now() - start < timeout) {
@@ -222,6 +391,7 @@
             type: 'EDU_SET_CODE',
             frameId: editorFrameId,
             editorId: model.id,
+            editorType: model.type,
             code: ans.code
           });
           if (!wr?.ok) {
@@ -320,6 +490,14 @@
   );
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg?.type === 'EDU_DOM_FIND') {
+      sendResponse(domFind());
+      return false;
+    }
+    if (msg?.type === 'EDU_DOM_SET') {
+      domSet(msg.editorType, msg.code).then(sendResponse);
+      return true;
+    }
     if (msg?.type === 'WG_START') {
       start(msg.settings);
       sendResponse({ ok: true });

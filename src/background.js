@@ -176,6 +176,22 @@ async function findEduEditors(tabId) {
   return all;
 }
 
+async function findEduDomEditors(tabId) {
+  const frames = await chrome.webNavigation.getAllFrames({ tabId }).catch(() => [{ frameId: 0 }]);
+  const out = [];
+  await Promise.all(
+    (frames || [{ frameId: 0 }]).map(async (f) => {
+      try {
+        const res = await chrome.tabs.sendMessage(tabId, { type: 'EDU_DOM_FIND' }, { frameId: f.frameId });
+        if (res?.ok && res.editor) out.push({ ...res.editor, frameId: f.frameId, url: res.url || '' });
+      } catch {}
+    })
+  );
+  const order = { 'dom-monaco': 0, 'dom-ace': 1, 'dom-cm5': 2, 'dom-cm6': 3, 'dom-textarea': 4, 'dom-editable': 5 };
+  out.sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || (b.length || 0) - (a.length || 0));
+  return out;
+}
+
 const ports = new Set();
 const history = [];
 let lastState = { status: '待机', detail: '未开始', tone: 'idle' };
@@ -553,9 +569,35 @@ async function handle(msg, sender) {
       const tabId = sender?.tab?.id;
       if (!tabId) return { ok: false, error: '缺少标签页' };
       try {
-        const editors = await findEduEditors(tabId);
-        if (!editors.length) return { ok: false, error: '未找到代码编辑器' };
-        return { ok: true, editor: editors[0], editors: editors.slice(0, 8) };
+        const main = await findEduEditors(tabId);
+        const dom = await findEduDomEditors(tabId);
+        const known = (t) => ['monaco', 'ace', 'cm5', 'cm6', 'dom-monaco', 'dom-ace', 'dom-cm5', 'dom-cm6'].includes(t);
+        const mainKnown = main.filter((e) => known(e.type));
+        const domKnown = dom.filter((e) => known(e.type));
+        const pool = mainKnown.length ? mainKnown : domKnown.length ? domKnown : [...main, ...dom];
+        const order = {
+          monaco: 0,
+          'dom-monaco': 0,
+          ace: 1,
+          'dom-ace': 1,
+          cm5: 2,
+          'dom-cm5': 2,
+          cm6: 3,
+          'dom-cm6': 3,
+          textarea: 4,
+          'dom-textarea': 4,
+          editable: 5,
+          'dom-editable': 5
+        };
+        pool.sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || (b.length || 0) - (a.length || 0));
+        if (!pool.length) {
+          return {
+            ok: false,
+            error: '未找到代码编辑器',
+            diagnostics: { main: main.length, dom: dom.length }
+          };
+        }
+        return { ok: true, editor: pool[0], editors: pool.slice(0, 8) };
       } catch (e) {
         return { ok: false, error: String(e?.message || e) };
       }
@@ -565,6 +607,14 @@ async function handle(msg, sender) {
       if (!tabId || typeof msg.code !== 'string') return { ok: false, error: '缺少代码' };
       const frameId = Number.isInteger(msg.frameId) ? msg.frameId : sender?.frameId ?? 0;
       try {
+        if (/^dom-/.test(msg.editorType || '')) {
+          const res = await chrome.tabs.sendMessage(
+            tabId,
+            { type: 'EDU_DOM_SET', editorType: msg.editorType, code: msg.code },
+            { frameId }
+          );
+          return res || { ok: false, error: '无返回' };
+        }
         const results = await runEduEditor(tabId, [frameId], 'set', msg.editorId || '', msg.code);
         return results?.[0]?.result || { ok: false, error: '无返回' };
       } catch (e) {

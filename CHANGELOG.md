@@ -2,6 +2,26 @@
 
 本项目采用语义化版本。当前处于公开测试阶段（0.x），接口与行为仍可能调整。
 
+## [0.7.2] - 2026-11-02
+
+### Fixed
+
+- **头歌编辑器仍然找不到**：0.7.1 用 `chrome.scripting` 在所有 frame 的 MAIN world 扫描，但真实页面的编辑器可能在 **sandbox/跨域 iframe** 中，`executeScript` 无法注入，导致 `main/dom` 均为 0。
+- 新增 `match_origin_as_fallback: true`：让 `edu-main` 也能注入 `about:blank` / `srcdoc` / sandbox 的 opaque-origin 编辑器 frame。
+- 新增 **DOM 回退链路**：background 通过 `chrome.tabs.sendMessage` 逐帧调用 `EDU_DOM_FIND`；内容脚本扫描当前 frame、同源 iframe 与 open shadow DOM，识别 `.monaco-editor` / `.cm-editor` / `.ace_editor` / `.CodeMirror` / textarea / contenteditable。
+- `EDU_DOM_SET` 在编辑器 frame 内执行：
+  - 点击/聚焦编辑器（Monaco `.inputarea`、CM6 `.cm-content`、Ace `ace_text-input`、CM5 textarea）；
+  - Ctrl+A + `execCommand('selectAll')` 清空；
+  - `execCommand('insertText')`；失败则合成 `ClipboardEvent('paste')` + `DataTransfer`（CM6/Monaco 都按 paste/input 处理）；
+  - textarea 再回退原生 setter + input/change。
+- DOM 回退会遍历同源 iframe 的 document 与 open shadow root；跨域/sandbox frame 由该 frame 自己的内容脚本响应。
+- 启动日志会显示 `编辑器：dom-monaco/dom-cm6/... · frame#N`；写入失败会记录 active element，便于定位。
+
+### Tested
+
+- 本地 mock：同源 iframe 内 CodeMirror 6，top frame 的 `EDU_DOM_FIND` 跨 iframe 找到 `dom-cm6`，`EDU_DOM_SET` 成功替换为 `CREATE DATABASE library; show databases;`（`inserted=true`）。
+- 原有两关流程 mock 仍通过。
+
 ## [0.7.1] - 2026-11-02
 
 ### Fixed

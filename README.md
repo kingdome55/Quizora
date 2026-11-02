@@ -7,7 +7,7 @@
 <p align="center">在已打开的答题页面上自动识别整卷题目、调用大模型判题并填写答案 —— 不自动交卷。</p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-0.7.1-6D28D9" />
+  <img alt="version" src="https://img.shields.io/badge/version-0.7.2-6D28D9" />
   <img alt="manifest" src="https://img.shields.io/badge/Manifest-V3-2563EB" />
   <img alt="platform" src="https://img.shields.io/badge/Edge%20%7C%20Chrome-Side%20Panel-10B981" />
   <img alt="license" src="https://img.shields.io/badge/license-MIT-10B981" />
@@ -62,7 +62,7 @@
 
 ### 方式一：使用发布包（推荐）
 
-1. 下载安装包：[GitHub Release v0.7.1](https://github.com/kingdome55/Quizora/releases/download/v0.7.1/quizora-v0.7.1.zip)（备用：[仓库内 ZIP](release/quizora-v0.7.1.zip)）。
+1. 下载安装包：[GitHub Release v0.7.2](https://github.com/kingdome55/Quizora/releases/download/v0.7.2/quizora-v0.7.2.zip)（备用：[仓库内 ZIP](release/quizora-v0.7.2.zip)）。
 2. **完整解压**到一个固定目录，例如 `D:\Quizora\`。解压后该目录里应直接看到 `manifest.json`。
 3. 打开 `edge://extensions`（Chrome 为 `chrome://extensions`）。
 4. 打开右上角“开发人员模式”。
@@ -136,7 +136,7 @@ A：Key 仅存本机扩展存储，明文保存；不要在共用电脑上使用
 
 - Manifest V3（Service Worker + Side Panel + Content Scripts）
 - 原生 JavaScript / HTML / CSS，**无框架、零构建依赖**；仅内置字体解析所需的最小第三方库（见“第三方组件”）
-- 头歌代码编辑器跨 frame 自动识别 Monaco / Ace / CodeMirror 5/6 / textarea / contenteditable：通过 `chrome.scripting` 在 MAIN world 读写，绕过禁用粘贴的 DOM 限制
+- 头歌代码编辑器跨 frame 自动识别 Monaco / Ace / CodeMirror 5/6 / textarea / contenteditable：优先 MAIN world API 写入；若编辑器在 sandbox/跨域 iframe 中不可注入，则用内容脚本 DOM 回退（聚焦 + `insertText` / 合成 paste），绕过禁用粘贴
 - OpenAI 兼容 Chat Completions 接口（支持 `image_url` 多模态）
 - `chrome.scripting`、`chrome.webNavigation`、`chrome.storage.local`
 
@@ -163,7 +163,7 @@ release/                 发布包（ZIP）
 Get-ChildItem -Recurse -File -Filter *.js | ForEach-Object { node --check $_.FullName }
 Get-Content manifest.json -Raw | ConvertFrom-Json | Out-Null
 
-# 生产构建（生成 dist/ 与 release/quizora-v0.7.1.zip）
+# 生产构建（生成 dist/ 与 release/quizora-v0.7.2.zip）
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
