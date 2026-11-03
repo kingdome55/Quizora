@@ -62,6 +62,7 @@ function fillConfig(cfg) {
   $('examSkip').checked = cfg.examSkipAnswered !== false;
   $('examScroll').checked = cfg.examScrollLoad !== false;
   $('eduAutoUnlock').checked = Boolean(cfg.eduAutoUnlock);
+  $('eduReferenceNoRecord').checked = cfg.eduReferenceNoRecord !== false;
 }
 
 function applyState(state) {
@@ -120,6 +121,7 @@ async function saveConfig({ notify = true } = {}) {
       examSkipAnswered: $('examSkip').checked,
       examScrollLoad: $('examScroll').checked,
       eduAutoUnlock: $('eduAutoUnlock').checked,
+      eduReferenceNoRecord: $('eduReferenceNoRecord').checked,
       useCache: true
     }
   });

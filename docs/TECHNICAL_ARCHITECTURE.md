@@ -1,6 +1,6 @@
 # 技术架构
 
-> 对应版本：0.7.9 · 所有路径相对 `wayground-auto/`
+> 对应版本：0.7.10 · 所有路径相对 `wayground-auto/`
 
 ## 1. 总体架构
 
@@ -37,7 +37,7 @@
 - **字体解密（cx-font.js）**：页面 `<style>` 内嵌 `font-cxsecret` TTF → `Typr.parse` → 对 CJK 码位算 `glyphToPath` 的 MD5 → 查 `cx-font-table.json` → 构建“替换码位 → 真实码位”映射；`cx-adapter.norm()` 在文本进入模型前解密，并同步改写 `.font-cxsecret` 文本节点。
 - **填空写入（cx-fill.js）**：`.XztiHover1` 是答案格（左侧 `span.tiankong` 只是“第 N 空”标签）→ 格内 `input.inp` 用原生 setter 写入；UEditor 先写同源编辑 iframe，再通过 background `WG_UE_FILL` 在 MAIN world 调 `UE.getEditor(name).setContent()+sync()`。
 
-### 1.3 头歌（EduCoder）粘贴/查看限制解除 + 参考答案（0.7.3–0.7.9）
+### 1.3 头歌（EduCoder）粘贴/查看限制解除 + 参考答案（0.7.3–0.7.10）
 
 - **平台级**：`edu-paste.js` 在 `document_start`、MAIN world、`all_frames` 注入；同时 hook `window.fetch` 与 `XMLHttpRequest`（头歌任务数据实际走 axios/XHR，0.7.7 只 hook fetch 时字段不生效），对 `/api/tasks` / `json?homework_common_id` 的 JSON 递归改写复制与查看入口字段：
   - 复制：`shixun.can_copy=true`、`forbid_copy=false`、`copy_for_exercise* = true`、`challenge.diasble_copy/disable_copy=false`；
@@ -46,6 +46,8 @@
 - **参考答案**：`edu-paste.js` 采集任务 ID、`Pc-Authorization` 等请求头，并使用公开签名算法 `md5(base64("method=GET&ak=...&sk=...&time=..."))` 直接调用官方 `get_answer_info.json`；正文不伪造。`unlock_answer.json` 仅在侧边栏开启“自动解锁（消耗金币/留记录）”时调用；未解锁则回退 AI。
 - **参考答案优先流程**：`edu-main` 通过 `window.postMessage` 请求 `edu-paste` 读取答案；拿到后直接写入编辑器并评测，参考答案未通过时自动回退 `EDU_SOLVE` AI 修正。若签名接口失败，回退读取页面 `.answer-content` 的已解锁答案。
 - **编辑器选择（0.7.9）**：0.7.7 打开参考答案入口后页面会创建隐藏 Monaco model，旧逻辑按“内容最长”选择会写错位置。`eduEditorScript` 现在用 `monaco.editor.getEditors()` + DOM 面积标记 `visible/area`，排序可见优先；`EDU_SET_CODE` 收到隐藏 `editorId` 时重定向到可见 model。
+- **模板合并（0.7.10）**：参考答案/AI 往往只返回解题片段。`mergeWithTemplate` 检测当前编辑器的 `#代码开始` / `#代码结束`，把片段插入标记之间并保留 `use library;`；完整答案（自身含标记）原样写入。
+- **无记录读取（0.7.10）**：默认 `eduReferenceNoRecord=true`，`edu-main` 优先读 `.answer-content` 或 `sessionStorage` 缓存，不调用 `get_answer_info` / `unlock_answer`；未命中时回退 AI。关闭该开关才恢复平台接口与可选自动解锁。
 - **冷却与停止**：`edu-adapter.cooldownText()` + `isDisabled()` 检测评测按钮冷却，`waitEvaluateReady`/`waitCooldown` 最多等待 90 秒；`stopRun` 向所有已启动 frame 广播 `WG_STOP` 并 `clearFrame`，修复停止后探测失败/重复开始被忽略。
 - **状态**：`edu-paste-ready.js`（隔离 world，top frame）发 `EDU_PASTE_READY`；收到 MAIN world 的 `VIEW_UNLOCKED` 后发 `EDU_VIEW_UNLOCKED`，徽标/侧边栏更新为“粘贴/查看限制已解除（含参考答案入口）”。
 - **边界**：`/exam` 不解锁；不修改答案内容、金币、成绩或评测状态。

@@ -11,6 +11,41 @@
   let lastReport = '';
   const sleep = A.sleep;
   const referenceWaiters = new Map();
+  const ANSWER_CACHE_KEY = 'quizora_edu_answer_cache_v1';
+
+  function readCachedAnswer() {
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(ANSWER_CACHE_KEY) || 'null');
+      if (cached && cached.path === location.pathname && cached.code) return String(cached.code).trim();
+    } catch {}
+    return '';
+  }
+
+  function cacheAnswer(code) {
+    const text = String(code || '').trim();
+    if (!text) return;
+    try {
+      sessionStorage.setItem(ANSWER_CACHE_KEY, JSON.stringify({ path: location.pathname, code: text, ts: Date.now() }));
+    } catch {}
+  }
+
+  function watchVisibleAnswer() {
+    const capture = () => {
+      try {
+        const code = A.readVisibleAnswer?.();
+        if (code) cacheAnswer(code);
+      } catch {}
+    };
+    capture();
+    try {
+      new MutationObserver(capture).observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        characterData: true
+      });
+    } catch {}
+    setInterval(capture, 2500);
+  }
 
   function send(msg) {
     try {
@@ -349,6 +384,24 @@
     return null;
   }
 
+  function mergeWithTemplate(template, code) {
+    const tpl = String(template || '');
+    let src = String(code || '').trim();
+    if (!src) return src;
+    const codeHasMarkers = /#代码开始/.test(src) && /#代码结束/.test(src);
+    if (codeHasMarkers) return src;
+    const tplStart = tpl.search(/#代码开始[^\n]*\n?/);
+    const tplEnd = tpl.search(/#代码结束/);
+    if (tplStart < 0 || tplEnd < tplStart) {
+      return src.replace(/^\s*use\s+library\s*;\s*/i, '').trim();
+    }
+    const startLineEnd = tpl.indexOf('\n', tplStart);
+    const prefix = startLineEnd >= 0 ? tpl.slice(0, startLineEnd + 1) : `${tpl.slice(0, tplStart)}#代码开始\n`;
+    const suffix = tpl.slice(tplEnd);
+    const body = src.replace(/^\s*use\s+library\s*;\s*/i, '').trim();
+    return `${prefix}${body}\n${suffix}`.replace(/\n{3,}/g, '\n\n');
+  }
+
   function evalBaseline() {
     const next = A.findLike(/^(下一关|下一题|继续|进入下一关)$/);
     const r = A.readResult();
@@ -467,37 +520,49 @@
 
         let reference = null;
         if (settings.eduUseReference !== false && !settings.dryRun) {
-          report('读取答案', '正在读取平台参考答案…', 'work');
-          const ref = await requestReference(12000);
-          if (!running || tk !== token) return;
-          if (ref?.ok && ref.code) {
-            reference = ref;
-            log('ok', `已读取平台参考答案（${ref.code.length} 字符${ref.name ? ` · ${ref.name}` : ''}）`);
-          } else {
-            if (ref?.locked && settings.eduAutoUnlock && ref.answerId) {
-              log(
-                'warn',
-                `参考答案未解锁，正在按设置自动解锁（${ref.score ?? '?'} 金币，平台会留下查看记录）…`
-              );
-              const unlocked = await requestUnlock(ref.answerId, 15000);
-              if (!running || tk !== token) return;
-              if (unlocked?.ok && unlocked.code) {
-                reference = { ok: true, code: unlocked.code, name: '已解锁参考答案' };
-                log('ok', `已解锁并读取参考答案（${reference.code.length} 字符）`);
-              } else {
-                log('warn', `自动解锁失败：${unlocked?.error || '未知错误'}`);
+          const visible = (A.readVisibleAnswer?.() || '').trim() || readCachedAnswer();
+          if (visible) {
+            reference = { ok: true, code: visible, name: '页面已显示/缓存答案' };
+            cacheAnswer(visible);
+            log('ok', `已读取页面已显示/缓存的参考答案（${visible.length} 字符，未调用查看接口）`);
+          }
+          if (!reference && settings.eduReferenceNoRecord !== false) {
+            log('info', '未发现已显示/缓存的参考答案；按设置不主动调用查看接口，改用 AI 生成');
+          } else if (!reference) {
+            report('读取答案', '正在读取平台参考答案…', 'work');
+            const ref = await requestReference(12000);
+            if (!running || tk !== token) return;
+            if (ref?.ok && ref.code) {
+              reference = ref;
+              cacheAnswer(ref.code);
+              log('ok', `已读取平台参考答案（${ref.code.length} 字符${ref.name ? ` · ${ref.name}` : ''}）`);
+            } else {
+              if (ref?.locked && settings.eduAutoUnlock && ref.answerId) {
+                log(
+                  'warn',
+                  `参考答案未解锁，正在按设置自动解锁（${ref.score ?? '?'} 金币，平台会留下查看记录）…`
+                );
+                const unlocked = await requestUnlock(ref.answerId, 15000);
+                if (!running || tk !== token) return;
+                if (unlocked?.ok && unlocked.code) {
+                  reference = { ok: true, code: unlocked.code, name: '已解锁参考答案' };
+                  log('ok', `已解锁并读取参考答案（${reference.code.length} 字符）`);
+                } else {
+                  log('warn', `自动解锁失败：${unlocked?.error || '未知错误'}`);
+                }
               }
-            }
-            if (!reference && !ref?.locked && A.readAnswerPanel) {
-              const panel = await A.readAnswerPanel(10000);
-              if (panel && panel.trim()) {
-                reference = { ok: true, code: panel.trim(), name: '页面参考答案' };
-                log('ok', `已从页面读取参考答案（${reference.code.length} 字符）`);
+              if (!reference && !ref?.locked && A.readAnswerPanel) {
+                const panel = await A.readAnswerPanel(10000);
+                if (panel && panel.trim()) {
+                  reference = { ok: true, code: panel.trim(), name: '页面参考答案' };
+                  log('ok', `已从页面读取参考答案（${reference.code.length} 字符）`);
+                }
               }
-            }
-            if (!reference) {
-              const hint = ref?.locked ? '；可在侧边栏勾选“参考答案自动解锁”，或先手动解锁' : '';
-              log('warn', `参考答案不可用：${ref?.error || '未解锁'}${hint}；改用 AI 生成`);
+              if (reference) cacheAnswer(reference.code);
+              if (!reference) {
+                const hint = ref?.locked ? '；可在侧边栏勾选“参考答案自动解锁”，或先手动解锁' : '';
+                log('warn', `参考答案不可用：${ref?.error || '未解锁'}${hint}；改用 AI 生成`);
+              }
             }
           }
         }
@@ -541,12 +606,16 @@
             return;
           }
 
+          const writeCode = mergeWithTemplate(model.value, ans.code);
+          if (writeCode !== ans.code) {
+            log('info', `已按 #代码开始 / #代码结束 模板合并答案（${ans.code.length} → ${writeCode.length} 字符）`);
+          }
           const normCode = (s) => String(s || '').replace(/\s+/g, '').trim();
-          const codeNorm = normCode(ans.code);
+          const codeNorm = normCode(writeCode);
           const valueNorm = normCode(model.value);
           const occurrences = codeNorm ? valueNorm.split(codeNorm).length - 1 : 0;
           if (valueNorm === codeNorm) {
-            log('info', '编辑器内容与生成代码一致，跳过重复写入');
+            log('info', '编辑器内容与写入代码一致，跳过重复写入');
           } else {
             if (occurrences > 1) log('warn', `编辑器已有 ${occurrences} 份相同代码，重写清理`);
             const wr = await send({
@@ -554,7 +623,7 @@
               frameId: editorFrameId,
               editorId: model.id,
               editorType: model.type,
-              code: ans.code
+              code: writeCode
             });
             if (!wr?.ok) {
               log('error', `写入 ${editorType || '编辑器'} 失败：${wr?.error || '未知错误'}`);
@@ -563,7 +632,7 @@
             if (wr.id) model.id = wr.id;
             log('ok', `已写入代码（${wr.length} 字符）`);
           }
-          model.value = ans.code;
+          model.value = writeCode;
 
           report('评测中', `第 ${passed + 1} 关 · 第 ${attempt}/${maxAttempts} 次`, 'work');
           const before = evalBaseline();
@@ -702,5 +771,6 @@
     }
   } catch {}
 
+  watchVisibleAnswer();
   NS.eduMain = { start, stop: () => stop('调试停止') };
 })();

@@ -682,6 +682,13 @@ async function handle(msg, sender) {
       const frameId = Number.isInteger(msg.frameId) ? msg.frameId : sender?.frameId ?? 0;
       try {
         if (/^dom-/.test(msg.editorType || '')) {
+          // DOM 探测到的编辑器优先尝试 MAIN world 的 Monaco/CM/Ace API，
+          // API 写入是覆盖式 setValue，不会像 insertText 一样把答案插到模板前面。
+          try {
+            const mainResults = await runEduEditor(tabId, [frameId], 'set', msg.editorId || '', msg.code);
+            const mainResult = mainResults?.[0]?.result;
+            if (mainResult?.ok) return mainResult;
+          } catch {}
           const res = await chrome.tabs.sendMessage(
             tabId,
             { type: 'EDU_DOM_SET', editorType: msg.editorType, code: msg.code },

@@ -10,7 +10,8 @@ export const DEFAULT_CONFIG = {
   examScrollLoad: true,
   eduMaxAttempts: 3,
   eduUseReference: true,
-  eduAutoUnlock: false
+  eduAutoUnlock: false,
+  eduReferenceNoRecord: true
 };
 
 const KEY = 'wg_config_v1';

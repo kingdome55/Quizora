@@ -93,18 +93,25 @@
     return click(el);
   }
 
+  function readVisibleAnswer() {
+    const inner = [...document.querySelectorAll('.answer-content [id^="answer-content-"]')].filter(isVisible);
+    if (!inner.length) return '';
+    let best = '';
+    for (const el of inner) {
+      const t = String(el.innerText || el.textContent || el.value || '').trim();
+      if (!t || /禁止复制参考答案/.test(t)) continue;
+      if (t.length > best.length) best = t;
+    }
+    return best;
+  }
+
   async function readAnswerPanel(timeout = 10000) {
+    let best = readVisibleAnswer();
+    if (best) return best;
     clickTab('参考答案');
     const start = Date.now();
-    let best = '';
     while (Date.now() - start < timeout) {
-      const inner = [...document.querySelectorAll('.answer-content [id^="answer-content-"]')].filter(isVisible);
-      const nodes = inner.length ? inner : [...document.querySelectorAll('.answer-content')].filter(isVisible);
-      for (const el of nodes) {
-        const t = String(el.innerText || el.textContent || '').trim();
-        if (!t || /禁止复制参考答案/.test(t)) continue;
-        if (t.length > best.length) best = t;
-      }
+      best = readVisibleAnswer();
       if (best) {
         clickTab('学习内容');
         return best;
@@ -284,6 +291,7 @@
     click,
     findTextExact,
     clickTab,
+    readVisibleAnswer,
     readAnswerPanel,
     readResult,
     resultPanelText,

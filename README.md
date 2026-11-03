@@ -7,7 +7,7 @@
 <p align="center">在已打开的答题页面上自动识别整卷题目、调用大模型判题并填写答案 —— 不自动交卷。</p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-0.7.9-6D28D9" />
+  <img alt="version" src="https://img.shields.io/badge/version-0.7.10-6D28D9" />
   <img alt="manifest" src="https://img.shields.io/badge/Manifest-V3-2563EB" />
   <img alt="platform" src="https://img.shields.io/badge/Edge%20%7C%20Chrome-Side%20Panel-10B981" />
   <img alt="license" src="https://img.shields.io/badge/license-MIT-10B981" />
@@ -29,7 +29,7 @@
 
 - **整卷扫描**：一次识别页面上的全部题目，而不是只处理当前一题。
 - **结构无关识别**：容器选择器 + 题型标签 + `typeName` 属性 + 答题控件反推，多路合并去重。
-- **头歌（EduCoder）自动答题（参考答案优先）+ 粘贴/查看限制解除**：点“开始”会先读取平台官方 `get_answer_info` 的参考答案并直接写入编辑器，评测失败再回退 AI；同时改写任务 API 的 copy 与查看入口字段，恢复「参考答案 / 记录 / 评论 / 测试集 / 代码目录 / Git 地址」入口，并清理 `onpaste`。参考答案正文仍由平台官方接口返回（若平台要求金币或留记录，会照常提示），不伪造答案。侧边栏显示“头歌（EduCoder） / 自动答题（参考答案优先）+ 粘贴/查看限制解除”，页面右上角有平台徽标。
+- **头歌（EduCoder）自动答题（参考答案优先）+ 粘贴/查看限制解除**：点“开始”会优先读取页面已显示/缓存的参考答案，片段会自动合并进 `#代码开始` / `#代码结束` 模板（保留 `use library;`）；评测失败再回退 AI。默认不主动调用查看接口，避免新增金币/查看记录；需要平台接口时可在侧边栏关闭“只读已显示/缓存答案”。同时改写任务 API 的 copy 与查看入口字段，并清理 `onpaste`。
 - **多题型支持**：单选、多选、判断、填空（多空）、简答/论述/名词解释。
 - **图片题**：题目内图片可随题干一起发送给视觉模型（最多 2 张，长边 1024）。
 - **大模型判题**：兼容 OpenAI 接口，默认 DeepSeek；支持自定义 Base URL、模型与 Key。
@@ -62,7 +62,7 @@
 
 ### 方式一：使用发布包（推荐）
 
-1. 下载安装包：[GitHub Release v0.7.9](https://github.com/kingdome55/Quizora/releases/download/v0.7.9/quizora-v0.7.9.zip)（备用：[仓库内 ZIP](release/quizora-v0.7.9.zip)）。
+1. 下载安装包：[GitHub Release v0.7.10](https://github.com/kingdome55/Quizora/releases/download/v0.7.10/quizora-v0.7.10.zip)（备用：[仓库内 ZIP](release/quizora-v0.7.10.zip)）。
 2. **完整解压**到一个固定目录，例如 `D:\Quizora\`。解压后该目录里应直接看到 `manifest.json`。
 3. 打开 `edge://extensions`（Chrome 为 `chrome://extensions`）。
 4. 打开右上角“开发人员模式”。
@@ -163,7 +163,7 @@ release/                 发布包（ZIP）
 Get-ChildItem -Recurse -File -Filter *.js | ForEach-Object { node --check $_.FullName }
 Get-Content manifest.json -Raw | ConvertFrom-Json | Out-Null
 
-# 生产构建（生成 dist/ 与 release/quizora-v0.7.9.zip）
+# 生产构建（生成 dist/ 与 release/quizora-v0.7.10.zip）
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
