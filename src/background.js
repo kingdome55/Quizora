@@ -670,11 +670,22 @@ async function handle(msg, sender) {
     case 'EDU_PASTE_READY': {
       lastState = {
         status: '头歌（EduCoder）',
-        detail: '粘贴已解锁；点“开始”可自动答题（实验），也可直接粘贴代码手动评测',
+        detail: '粘贴已解锁；页面数据加载后会解除查看限制（含参考答案入口）；点“开始”可自动答题（实验）',
         tone: 'ok',
         site: 'educoder'
       };
       pushLog('ok', '头歌（EduCoder）已识别：粘贴已解锁；可点“开始”自动答题（实验）');
+      broadcast({ type: 'STATE', state: lastState });
+      return { ok: true };
+    }
+    case 'EDU_VIEW_UNLOCKED': {
+      lastState = {
+        status: '头歌（EduCoder）',
+        detail: '粘贴/查看限制已解除（含参考答案入口）；点“开始”可自动答题（实验）',
+        tone: 'ok',
+        site: 'educoder'
+      };
+      pushLog('ok', '头歌（EduCoder）：查看限制已解除（含参考答案入口）');
       broadcast({ type: 'STATE', state: lastState });
       return { ok: true };
     }

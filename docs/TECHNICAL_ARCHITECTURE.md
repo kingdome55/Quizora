@@ -1,6 +1,6 @@
 # 技术架构
 
-> 对应版本：0.7.6 · 所有路径相对 `wayground-auto/`
+> 对应版本：0.7.7 · 所有路径相对 `wayground-auto/`
 
 ## 1. 总体架构
 
@@ -37,15 +37,17 @@
 - **字体解密（cx-font.js）**：页面 `<style>` 内嵌 `font-cxsecret` TTF → `Typr.parse` → 对 CJK 码位算 `glyphToPath` 的 MD5 → 查 `cx-font-table.json` → 构建“替换码位 → 真实码位”映射；`cx-adapter.norm()` 在文本进入模型前解密，并同步改写 `.font-cxsecret` 文本节点。
 - **填空写入（cx-fill.js）**：`.XztiHover1` 是答案格（左侧 `span.tiankong` 只是“第 N 空”标签）→ 格内 `input.inp` 用原生 setter 写入；UEditor 先写同源编辑 iframe，再通过 background `WG_UE_FILL` 在 MAIN world 调 `UE.getEditor(name).setContent()+sync()`。
 
-### 1.3 头歌（EduCoder）粘贴解锁（0.7.3）
+### 1.3 头歌（EduCoder）粘贴/查看限制解除（0.7.3–0.7.7）
 
-- **目标**：不再自动生成代码，只让编辑器接受用户自己的粘贴。
-- **平台级**：`edu-paste.js` 在 `document_start`、MAIN world、`all_frames` 注入；hook `window.fetch`，对 `/api/tasks` / `json?homework_common_id` 的 JSON 递归改写 `shixun.can_copy=true`、`forbid_copy=false`、`copy_for_exercise* = true`、`challenge.diasble_copy/disable_copy=false`。
+- **平台级**：`edu-paste.js` 在 `document_start`、MAIN world、`all_frames` 注入；hook `window.fetch`，对 `/api/tasks` / `json?homework_common_id` 的 JSON 递归改写复制与查看入口字段：
+  - 复制：`shixun.can_copy=true`、`forbid_copy=false`、`copy_for_exercise* = true`、`challenge.diasble_copy/disable_copy=false`；
+  - 查看：`has_answer=true`、`challenge.hide_answer=false`、`game.homework_common_answer_open=false`、`game.answer_open=1`、`game.homework_common_comment_open=false`、`shixun.is_disable_discuss=false`、`test_set_permission=true`、`open_answer_and_test=1`、`show_code_dir=true`、`display_git_address=true`。
 - **编辑器级**：递归清理 `input/textarea/[contenteditable]/.monaco-editor/.cm-editor/.ace_editor/.CodeMirror` 的 `onpaste`，恢复 `user-select:text`；MutationObserver + 12 次短轮询覆盖动态编辑器。
-- **状态**：`edu-paste-ready.js`（隔离 world，top frame）发 `EDU_PASTE_READY`，面板显示“头歌粘贴模式”；`startRun`/`probe` 对头歌直接返回粘贴模式，不注入自动答题脚本。
-- **边界**：`/exam` 不解锁；只改写 copy 相关字段，不修改答案/成绩。
+- **参考答案**：正文不伪造，仍由平台官方 `get_answer_info.json` / `unlock_answer.json` 返回；控制台输出 `status / entries / content / cost` 摘要，平台要求金币或留记录时照常提示。
+- **状态**：`edu-paste-ready.js`（隔离 world，top frame）发 `EDU_PASTE_READY`；收到 MAIN world 的 `VIEW_UNLOCKED` 后发 `EDU_VIEW_UNLOCKED`，徽标/侧边栏更新为“粘贴/查看限制已解除（含参考答案入口）”。
+- **边界**：`/exam` 不解锁；不修改答案内容、金币、成绩或评测状态。
 
-### 1.2 头歌（EduCoder）自动答题链路（0.7.0–0.7.2，已停用）
+### 1.2 头歌（EduCoder）自动答题链路（0.7.0–0.7.2，0.7.4 恢复）
 
 - **站点**：`*.educoder.net` 直接打开，或作为学习通 `doHomeWorkNew` 内的跨域 iframe；两种形态都由静态内容脚本 `all_frames` 注入。
 - **edu-adapter.js（DOM 侧）**：读取左侧“任务描述”文本；按文本查找“评测 / 下一关”按钮；读取“测试结果”面板并按关键词判定通过/失败；几何+文本启发式，避免依赖具体 class。

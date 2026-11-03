@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "题灵",
   "short_name": "题灵",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "description": "题灵（Quizora）：Wayground/Quizizz、学习通、头歌编程作业与通用网页自动答题助手，整卷扫描 + 大模型判题 + 可调节奏。",
   "permissions": [
     "scripting",

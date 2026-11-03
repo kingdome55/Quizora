@@ -269,9 +269,9 @@
 
 ---
 
-## E. 头歌（EduCoder）粘贴解锁（0.7.3）
+## E. 头歌（EduCoder）粘贴/查看限制解除（0.7.3–0.7.7）
 
-> 以下 E1–E6 的自动答题排障已停用；粘贴问题见 E7。
+> 以下 E1–E6 的自动答题排障已停用；粘贴问题见 E7，查看限制问题见 E8。
 
 ### E7. 头歌粘贴仍被禁止
 
@@ -280,6 +280,18 @@
 - 看响应 JSON 中 `shixun` / `challenge` 的 copy 字段名；若平台改成 `allow_copy` 等，把字段名发回补充。
 - 编辑器内先点一下再 Ctrl+V；部分 Monaco 需要焦点在编辑区。
 - 考试页（`/exam`）按设计不解锁。
+
+### E8. 参考答案标签仍不显示 / 点击提示禁止查看
+
+- 确认版本为 0.7.7+，刷新页面后控制台出现 `[题灵] 头歌查看限制已解除（含参考答案入口，0.7.7）`。
+- 在 DevTools → Network 查看 `/api/tasks/...json` 响应，确认以下字段已被改写：
+  - `has_answer=true`
+  - `challenge.hide_answer=false`
+  - `game.homework_common_answer_open=false`
+  - `game.answer_open=1`
+- 若标签出现但内容提示“将花费 X 积分”或“查看答案会留下记录”，这是平台官方解锁流程；插件不伪造答案、不改金币/成绩，按页面提示确认即可。
+- 控制台会输出 `[题灵] 头歌查看接口 ... status=... entries=... content=... cost=...`，把这一行发回可定位是接口拒绝还是答案未解锁。
+- 若任务数据是通过 XHR 而不是 fetch 加载，当前 hook 不覆盖；需补 XHR hook。
 
 ## E. 头歌（EduCoder）编程作业（历史，已停用）
 

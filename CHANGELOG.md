@@ -2,6 +2,19 @@
 
 本项目采用语义化版本。当前处于公开测试阶段（0.x），接口与行为仍可能调整。
 
+## [0.7.7] - 2026-11-03
+
+### Added（头歌查看限制解除）
+
+- MAIN world `fetch` hook 改写任务详情 JSON 的查看入口字段：`has_answer`、`challenge.hide_answer`、`game.homework_common_answer_open`、`game.answer_open`、`homework_common_comment_open`、`is_disable_discuss`。
+- 恢复「参考答案 / 记录 / 评论 / 测试集 / 代码目录 / Git 地址」入口；参考答案正文仍由平台官方 `get_answer_info.json` / `unlock_answer.json` 返回，不伪造答案、不修改金币与成绩。
+- 页面徽标与侧边栏增加“粘贴/查看限制已解除（含参考答案入口）”状态；页面控制台新增查看接口摘要（`status` / `entries` / `content` / `cost`），便于真机诊断。
+- 考试页（路径含 `/exam`）继续硬性跳过，不注入查看/粘贴解锁逻辑。
+
+### Tested
+
+- Node VM mock：任务 JSON 17 项字段断言全部通过；`get_answer_info` 响应体未被改写；`/exam` 页面未 hook。
+
 ## [0.7.6] - 2026-11-02
 
 ### Improved（仅准确率，不改速度/功能）

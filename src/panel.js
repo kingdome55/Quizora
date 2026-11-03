@@ -12,7 +12,7 @@ const SITE_LABELS = {
 const SITE_MODES = {
   chaoxing: '整卷答题',
   wayground: '单题答题',
-  educoder: '自动答题（实验）+ 粘贴解锁',
+  educoder: '自动答题（实验）+ 粘贴/查看限制解除',
   generic: '通用网页'
 };
 

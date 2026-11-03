@@ -31,7 +31,7 @@
     el.innerHTML =
       '<div style="font-weight:600;color:#fff">题灵 · 头歌（EduCoder）</div>' +
       '<div style="font-size:11px;color:#b9b3d4;margin-top:2px">' +
-      (active ? '自动答题运行中（实验）' : '粘贴已解锁 · 自动答题可用（实验）') +
+      (active ? '自动答题运行中（实验）' : '粘贴/查看限制已解除 · 自动答题可用（实验）') +
       '</div>';
   }
 
@@ -525,7 +525,7 @@
       if (running) stop('用户点击 HUD');
     });
     report('准备中', '正在读取任务与编辑器…', 'work');
-    log('info', '头歌（EduCoder）自动答题启动（实验；同页粘贴已解锁）');
+    log('info', '头歌（EduCoder）自动答题启动（实验；同页粘贴/查看限制已解除）');
     run(token);
   }
 
