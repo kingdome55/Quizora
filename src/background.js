@@ -669,7 +669,13 @@ async function handle(msg, sender) {
         const known = (t) => ['monaco', 'ace', 'cm5', 'cm6', 'dom-monaco', 'dom-ace', 'dom-cm5', 'dom-cm6'].includes(t);
         const mainKnown = main.filter((e) => known(e.type));
         const domKnown = dom.filter((e) => known(e.type));
-        const pool = mainKnown.length || domKnown.length ? [...mainKnown, ...domKnown] : [...main, ...dom];
+        const pool =
+          mainKnown.length || domKnown.length
+            ? [
+                ...mainKnown.map((e) => ({ ...e, _main: true })),
+                ...domKnown.map((e) => ({ ...e, _main: false }))
+              ]
+            : [...main.map((e) => ({ ...e, _main: true })), ...dom.map((e) => ({ ...e, _main: false }))];
         const order = {
           monaco: 0,
           'dom-monaco': 0,
@@ -686,8 +692,9 @@ async function handle(msg, sender) {
         };
         pool.sort(
           (a, b) =>
-            (order[a.type] ?? 9) - (order[b.type] ?? 9) ||
             (b.visible ? 1 : 0) - (a.visible ? 1 : 0) ||
+            (b._main ? 1 : 0) - (a._main ? 1 : 0) ||
+            (order[a.type] ?? 9) - (order[b.type] ?? 9) ||
             (b.area || 0) - (a.area || 0) ||
             (b.length || 0) - (a.length || 0)
         );

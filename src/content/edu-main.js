@@ -622,11 +622,12 @@
           const codeNorm = normCode(writeCode);
           const valueNorm = normCode(model.value);
           const occurrences = codeNorm ? valueNorm.split(codeNorm).length - 1 : 0;
+          let wr = null;
           if (valueNorm === codeNorm) {
             log('info', '编辑器内容与写入代码一致，跳过重复写入');
           } else {
             if (occurrences > 1) log('warn', `编辑器已有 ${occurrences} 份相同代码，重写清理`);
-            const wr = await send({
+            wr = await send({
               type: 'EDU_SET_CODE',
               frameId: editorFrameId,
               editorId: model.id,
@@ -638,13 +639,14 @@
               break;
             }
             if (wr.id) model.id = wr.id;
+            if (wr.type) model.type = wr.type;
             log('ok', `已写入代码（${wr.length} 字符 · ${wr.type || editorType}${wr.id ? ` · ${wr.id}` : ''}）`);
           }
           model.value = writeCode;
 
           // API 写入（Monaco/CM/Ace）以 setValue 返回的长度为准；
           // 只有写入目标被标记为隐藏时才用 DOM 兜底，避免拿 CodeMirror 虚拟行文本误判。
-          if (wr.visible === false) {
+          if (wr?.visible === false) {
             log('warn', '写入目标是隐藏编辑器，尝试 DOM 覆盖…');
             const domType =
               model.type === 'monaco'

@@ -2,6 +2,20 @@
 
 本项目采用语义化版本。当前处于公开测试阶段（0.x），接口与行为仍可能调整。
 
+## [0.7.14] - 2026-11-03
+
+### Fixed（wr is not defined / 编辑器优先级）
+
+- 修复 `wr` 作用域错误：`wr` 声明在写入分支内，写后兜底判断在分支外引用导致 `ReferenceError`，日志表现为“已写入代码”后立即“停止：运行异常：wr is not defined”。
+- 编辑器选择改为“可见优先 → MAIN world API 优先 → 类型/面积 → 长度”；页面同时有 `dom-monaco` 和 `cm5` 时优先选可读写 API 的 `cm5`，而不是 DOM 兜底。
+- 写入成功后把 `model.type` 更新为实际写入类型（如 `cm5`），后续重试直接走 API。
+- 0.7.13 的 CodeMirror 误判/重复代码修复与模板清理继续保留。
+
+### Tested
+
+- `edu-main` 参考答案写入/评测 mock 通过，不再出现 `wr is not defined`。
+- 模板合并、重复模板清理、可见 Monaco 回退测试继续通过。
+
 ## [0.7.13] - 2026-11-03
 
 ### Fixed（CodeMirror 5 重复代码 / 误判写入失败）
