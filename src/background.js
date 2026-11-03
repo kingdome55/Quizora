@@ -48,6 +48,26 @@ function eduEditorScript(mode, editorId, code) {
         visibleModels.set(model, Math.max(visibleModels.get(model) || 0, area));
       }
     } catch {}
+    if (visibleModels.size === 0) {
+      try {
+        const doms = [...document.querySelectorAll('.monaco-editor')].filter(rectOk);
+        for (const dom of doms) {
+          const view = String(dom.querySelector('.view-lines')?.innerText || '').replace(/\s+/g, '');
+          if (!view) continue;
+          const r = dom.getBoundingClientRect();
+          const area = Math.max(0, r.width * r.height);
+          for (const m of ms) {
+            const mv = String(m.getValue?.() || '').replace(/\s+/g, '');
+            if (!mv) continue;
+            const head = view.slice(0, Math.min(80, view.length));
+            if (mv.startsWith(head) || view.startsWith(mv.slice(0, Math.min(80, mv.length)))) {
+              visibleModels.set(m, Math.max(visibleModels.get(m) || 0, area));
+              break;
+            }
+          }
+        }
+      } catch {}
+    }
     ms.forEach((m, i) => {
       try {
         const area = visibleModels.get(m) || 0;

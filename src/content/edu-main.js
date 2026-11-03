@@ -630,7 +630,37 @@
               break;
             }
             if (wr.id) model.id = wr.id;
-            log('ok', `已写入代码（${wr.length} 字符）`);
+            log('ok', `已写入代码（${wr.length} 字符 · ${wr.type || editorType}${wr.id ? ` · ${wr.id}` : ''}）`);
+          }
+          model.value = writeCode;
+
+          // 回读可见编辑器，确认代码确实写进了页面显示的区域
+          const readBack = domFind();
+          const visibleText = String(readBack?.editor?.value || '');
+          if (!visibleText || normCode(visibleText) !== codeNorm) {
+            log('warn', `写入后可见编辑器未包含目标代码（${visibleText.length} 字符），尝试 DOM 覆盖…`);
+            const domType =
+              model.type === 'monaco'
+                ? 'dom-monaco'
+                : model.type === 'ace'
+                  ? 'dom-ace'
+                  : model.type === 'cm5'
+                    ? 'dom-cm5'
+                    : model.type === 'cm6'
+                      ? 'dom-cm6'
+                      : model.type;
+            const dr = await domSet(domType, writeCode);
+            if (!dr?.ok) {
+              log('error', `DOM 覆盖写入失败：${dr?.error || '未知错误'}，停止评测`);
+              break;
+            }
+            await sleep(220);
+            const after = domFind();
+            if (!after?.editor?.value || normCode(after.editor.value) !== codeNorm) {
+              log('error', 'DOM 覆盖后可见编辑器仍未包含目标代码，停止评测');
+              break;
+            }
+            log('ok', `已通过 DOM 覆盖写入可见编辑器（${dr.length || writeCode.length} 字符）`);
           }
           model.value = writeCode;
 

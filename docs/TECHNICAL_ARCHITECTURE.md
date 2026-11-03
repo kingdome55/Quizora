@@ -1,6 +1,6 @@
 # 技术架构
 
-> 对应版本：0.7.10 · 所有路径相对 `wayground-auto/`
+> 对应版本：0.7.11 · 所有路径相对 `wayground-auto/`
 
 ## 1. 总体架构
 
@@ -46,6 +46,7 @@
 - **参考答案**：`edu-paste.js` 采集任务 ID、`Pc-Authorization` 等请求头，并使用公开签名算法 `md5(base64("method=GET&ak=...&sk=...&time=..."))` 直接调用官方 `get_answer_info.json`；正文不伪造。`unlock_answer.json` 仅在侧边栏开启“自动解锁（消耗金币/留记录）”时调用；未解锁则回退 AI。
 - **参考答案优先流程**：`edu-main` 通过 `window.postMessage` 请求 `edu-paste` 读取答案；拿到后直接写入编辑器并评测，参考答案未通过时自动回退 `EDU_SOLVE` AI 修正。若签名接口失败，回退读取页面 `.answer-content` 的已解锁答案。
 - **编辑器选择（0.7.9）**：0.7.7 打开参考答案入口后页面会创建隐藏 Monaco model，旧逻辑按“内容最长”选择会写错位置。`eduEditorScript` 现在用 `monaco.editor.getEditors()` + DOM 面积标记 `visible/area`，排序可见优先；`EDU_SET_CODE` 收到隐藏 `editorId` 时重定向到可见 model。
+- **编辑器选择（0.7.11）**：若 `monaco.editor.getEditors()` 不可用/为空，用可见 `.monaco-editor .view-lines` 文本匹配 model 标记可见；写入后回读可见编辑器，仍未包含目标代码则 DOM 覆盖，仍失败则停止评测，避免“写隐藏后直接点评测”。
 - **模板合并（0.7.10）**：参考答案/AI 往往只返回解题片段。`mergeWithTemplate` 检测当前编辑器的 `#代码开始` / `#代码结束`，把片段插入标记之间并保留 `use library;`；完整答案（自身含标记）原样写入。
 - **无记录读取（0.7.10）**：默认 `eduReferenceNoRecord=true`，`edu-main` 优先读 `.answer-content` 或 `sessionStorage` 缓存，不调用 `get_answer_info` / `unlock_answer`；未命中时回退 AI。关闭该开关才恢复平台接口与可选自动解锁。
 - **冷却与停止**：`edu-adapter.cooldownText()` + `isDisabled()` 检测评测按钮冷却，`waitEvaluateReady`/`waitCooldown` 最多等待 90 秒；`stopRun` 向所有已启动 frame 广播 `WG_STOP` 并 `clearFrame`，修复停止后探测失败/重复开始被忽略。
