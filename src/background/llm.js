@@ -354,11 +354,16 @@ async function runJson({ config, messages, temperature = 0, validate }) {
         return { ok: false, error: '接口地址不存在，请检查 Base URL' };
       }
       if (attempt < 2) {
-        await sleep(attempt === 0 ? 1000 : 3000);
+        const retryable = [408, 425, 429, 500, 502, 503, 504].includes(e.status);
+        await sleep(retryable ? (attempt === 0 ? 3000 : 8000) : attempt === 0 ? 1000 : 3000);
       }
     }
   }
 
+  const busyStatus = [429, 500, 502, 503, 504].includes(lastError?.status);
+  if (busyStatus) {
+    return { ok: false, error: `AI 服务繁忙（HTTP ${lastError.status}），请稍后重试或切换模型` };
+  }
   const reason = lastError?.name === 'AbortError' ? '请求超时' : lastError?.message || '调用失败';
   return { ok: false, error: reason };
 }

@@ -596,8 +596,14 @@
           }
           if (!running || tk !== token) return;
           if (!ans?.ok) {
-            log('error', `代码生成失败：${ans?.error || '未知错误'}`);
-            break;
+            const err = ans?.error || '未知错误';
+            log('error', `代码生成失败：${err}`);
+            if (/AI 服务繁忙|Service is too busy|请求超时|timeout|HTTP 5|HTTP 4/i.test(err)) {
+              stopWith('AI 服务繁忙', '模型接口暂时不可用，请稍后重试或切换模型', 'warn', 'stop');
+            } else {
+              stopWith('生成失败', `AI 生成失败：${err}`, 'warn', 'failed');
+            }
+            return;
           }
           if (settings.dryRun) {
             log('warn', `演练模式：已生成 ${ans.code.length} 字符代码，未写入/未评测。关闭演练后重新开始。`);

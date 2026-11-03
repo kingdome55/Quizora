@@ -82,6 +82,8 @@ async function refresh() {
     if (!initialized && res.config) {
       fillConfig(res.config);
       initialized = true;
+      const settings = $('settingsCard');
+      if (settings && !res.config.apiKey) settings.open = true;
     }
     $('cacheCount').textContent = res.cache?.count ?? 0;
     if (res.site) {

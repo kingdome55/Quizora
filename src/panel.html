@@ -13,67 +13,8 @@
   </header>
 
   <main>
-    <section class="card">
-      <h2>模型连接</h2>
-      <label class="field">
-        <span>API Base URL</span>
-        <input id="baseUrl" type="text" spellcheck="false" placeholder="https://api.deepseek.com/v1" />
-      </label>
-      <label class="field">
-        <span>API Key</span>
-        <input id="apiKey" type="password" spellcheck="false" placeholder="sk-..." />
-      </label>
-      <div class="row">
-        <button id="toggleKey" class="ghost" type="button">显示 Key</button>
-        <button id="clearKey" class="ghost" type="button">清空 Key</button>
-      </div>
-      <label class="field">
-        <span>模型</span>
-        <select id="model">
-          <option value="deepseek-flash">DeepSeek V4.1 Flash（deepseek-flash）</option>
-          <option value="deepseek-v4-pro">DeepSeek V4 Pro（deepseek-v4-pro）</option>
-          <option value="deepseek-chat">deepseek-chat（旧名）</option>
-          <option value="__custom__">自定义模型…</option>
-        </select>
-        <small class="hint">切换模型会自动更新并保存对应 Base URL</small>
-      </label>
-      <label class="field" id="customModelWrap" hidden>
-        <span>自定义模型名</span>
-        <input id="modelCustom" type="text" spellcheck="false" placeholder="model-id" />
-      </label>
-      <div class="row">
-        <button id="saveBtn" class="ghost" type="button">保存</button>
-        <button id="testBtn" class="ghost" type="button">测试连接</button>
-        <button id="testVisionBtn" class="ghost" type="button">测试图形</button>
-      </div>
-    </section>
-
-    <section class="card">
+    <section class="card run-card">
       <h2>运行</h2>
-      <label class="slider">
-        <span>答题间隔 <output id="delayOut">1.5s</output></span>
-        <input id="delay" type="range" min="0.3" max="3" step="0.1" value="1.5" />
-      </label>
-      <label class="check">
-        <input id="dryRun" type="checkbox" checked />
-        <span>演练模式（只给建议，不写入答案）</span>
-      </label>
-      <label class="check">
-        <input id="examSkip" type="checkbox" checked />
-        <span>学习通：跳过已作答题目</span>
-      </label>
-      <label class="check">
-        <input id="examScroll" type="checkbox" checked />
-        <span>学习通：启动时滚动加载</span>
-      </label>
-      <label class="check">
-        <input id="eduReferenceNoRecord" type="checkbox" checked />
-        <span>头歌：只读已显示/缓存答案，不主动调用查看接口（避免金币/记录）</span>
-      </label>
-      <label class="check">
-        <input id="eduAutoUnlock" type="checkbox" />
-        <span>头歌：参考答案未解锁时自动解锁（消耗金币/留记录）</span>
-      </label>
       <div class="row">
         <button id="startBtn" class="primary" type="button">开始</button>
         <button id="stopBtn" class="danger" type="button">停止</button>
@@ -84,7 +25,7 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card status-card">
       <h2>状态</h2>
       <div class="stat"><span>站点</span><b id="siteName">—</b></div>
       <div class="stat"><span>模式</span><b id="siteMode">—</b></div>
@@ -97,6 +38,71 @@
       <h2>日志</h2>
       <ul id="logs"></ul>
     </section>
+
+    <details class="card settings-card" id="settingsCard">
+      <summary>
+        <span>设置</span>
+        <small>模型 / 答题参数</small>
+      </summary>
+      <div class="settings-body">
+        <label class="field">
+          <span>API Base URL</span>
+          <input id="baseUrl" type="text" spellcheck="false" placeholder="https://api.deepseek.com/v1" />
+        </label>
+        <label class="field">
+          <span>API Key</span>
+          <input id="apiKey" type="password" spellcheck="false" placeholder="sk-..." />
+        </label>
+        <div class="row">
+          <button id="toggleKey" class="ghost" type="button">显示 Key</button>
+          <button id="clearKey" class="ghost" type="button">清空 Key</button>
+        </div>
+        <label class="field">
+          <span>模型</span>
+          <select id="model">
+            <option value="deepseek-flash">DeepSeek V4.1 Flash（deepseek-flash）</option>
+            <option value="deepseek-v4-pro">DeepSeek V4 Pro（deepseek-v4-pro）</option>
+            <option value="deepseek-chat">deepseek-chat（旧名）</option>
+            <option value="__custom__">自定义模型…</option>
+          </select>
+          <small class="hint">切换模型会自动更新并保存对应 Base URL</small>
+        </label>
+        <label class="field" id="customModelWrap" hidden>
+          <span>自定义模型名</span>
+          <input id="modelCustom" type="text" spellcheck="false" placeholder="model-id" />
+        </label>
+        <div class="row">
+          <button id="saveBtn" class="ghost" type="button">保存</button>
+          <button id="testBtn" class="ghost" type="button">测试连接</button>
+          <button id="testVisionBtn" class="ghost" type="button">测试图形</button>
+        </div>
+
+        <label class="slider">
+          <span>答题间隔 <output id="delayOut">1.5s</output></span>
+          <input id="delay" type="range" min="0.3" max="3" step="0.1" value="1.5" />
+        </label>
+        <label class="check">
+          <input id="dryRun" type="checkbox" checked />
+          <span>演练模式（只给建议，不写入答案）</span>
+        </label>
+        <label class="check">
+          <input id="examSkip" type="checkbox" checked />
+          <span>学习通：跳过已作答题目</span>
+        </label>
+        <label class="check">
+          <input id="examScroll" type="checkbox" checked />
+          <span>学习通：启动时滚动加载</span>
+        </label>
+        <label class="check">
+          <input id="eduReferenceNoRecord" type="checkbox" checked />
+          <span>头歌：只读已显示/缓存答案，不主动调用查看接口（避免金币/记录）</span>
+        </label>
+        <label class="check">
+          <input id="eduAutoUnlock" type="checkbox" />
+          <span>头歌：参考答案未解锁时自动解锁（消耗金币/留记录）</span>
+        </label>
+      </div>
+    </details>
   </main>
 
   <footer>快捷键 Alt+Shift+S 停止 · 刷新页面后需重新开始</footer>

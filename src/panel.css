@@ -19,7 +19,7 @@
 body {
   margin: 0;
   min-width: 320px;
-  padding: 18px 16px 26px;
+  padding: 14px 14px 20px;
   background:
     radial-gradient(900px 420px at 10% -10%, rgba(124, 58, 237, 0.28), transparent 60%),
     radial-gradient(700px 380px at 110% 0%, rgba(59, 130, 246, 0.18), transparent 55%),
@@ -70,26 +70,69 @@ header {
 main {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .card {
-  padding: 14px;
-  border-radius: 24px;
+  padding: 12px;
+  border-radius: 18px;
   border: 1px solid var(--line);
   background: var(--card);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 40px rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 28px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
 h2 {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
   letter-spacing: 0.6px;
   text-transform: uppercase;
+}
+
+.settings-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-card > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.settings-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-card > summary small {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.settings-card > summary::after {
+  content: "▾";
+  margin-left: auto;
+  color: var(--muted);
+  transition: transform 0.18s;
+}
+
+.settings-card[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.settings-body {
+  padding: 0 12px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .field {
