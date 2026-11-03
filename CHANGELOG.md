@@ -2,6 +2,19 @@
 
 本项目采用语义化版本。当前处于公开测试阶段（0.x），接口与行为仍可能调整。
 
+## [0.7.9] - 2026-11-03
+
+### Fixed（头歌写入错编辑器）
+
+- **根因**：0.7.7 打开参考答案入口后，头歌页面会额外创建隐藏的 Monaco model；旧逻辑在 `eduEditorScript` 中按“内容最长”选择 model，结果把答案写进隐藏 model，页面可见编辑器仍是空模板，随后直接点评测。
+- **修复**：编辑器发现改为**可见优先**（`monaco.editor.getEditors()` + DOM 面积），隐藏 model 排到后面；`EDU_SET_CODE` 收到隐藏 `editorId` 时也会重定向到可见 model；日志出现 `隐藏模型` 警告。
+- 同时保留 0.7.8 的参考答案优先、XHR hook、冷却等待与停止修复。
+
+### Tested
+
+- Node VM：可见 model（25 字符）与隐藏 model（120 字符）同时存在时，`find` 选中可见 model；`set` 传隐藏 id 仍写入可见 model。
+- 构建：见 `release/quizora-v0.7.9.zip`。
+
 ## [0.7.8] - 2026-11-03
 
 ### Added（头歌参考答案优先 + 稳定性）

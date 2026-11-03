@@ -16,16 +16,50 @@ function eduEditorScript(mode, editorId, code) {
     }
   };
   const list = [];
-  const add = (type, id, language, value, el) => {
+  const add = (type, id, language, value, el, visibleOverride, areaOverride) => {
     const text = String(value == null ? '' : value);
-    list.push({ type, id, language: String(language || ''), value: text, length: text.length, visible: el ? rectOk(el) : true });
+    let area = Number(areaOverride) || 0;
+    if (!area && el) {
+      try {
+        const r = el.getBoundingClientRect();
+        area = Math.max(0, r.width * r.height);
+      } catch {}
+    }
+    const visible = typeof visibleOverride === 'boolean' ? visibleOverride : el ? rectOk(el) : true;
+    list.push({ type, id, language: String(language || ''), value: text, length: text.length, visible, area });
   };
 
   try {
     const ms = window.monaco?.editor?.getModels?.() || [];
+    const visibleModels = new Map();
+    try {
+      const editors = window.monaco?.editor?.getEditors?.() || [];
+      for (const ed of editors) {
+        const dom = ed.getDomElement?.();
+        if (!dom) continue;
+        let area = 0;
+        try {
+          const r = dom.getBoundingClientRect();
+          area = Math.max(0, r.width * r.height);
+        } catch {}
+        if (!area || !rectOk(dom)) continue;
+        const model = ed.getModel?.();
+        if (!model) continue;
+        visibleModels.set(model, Math.max(visibleModels.get(model) || 0, area));
+      }
+    } catch {}
     ms.forEach((m, i) => {
       try {
-        add('monaco', `monaco:${i}`, m.getLanguageId ? m.getLanguageId() : '', m.getValue ? m.getValue() : '', null);
+        const area = visibleModels.get(m) || 0;
+        add(
+          'monaco',
+          `monaco:${i}`,
+          m.getLanguageId ? m.getLanguageId() : '',
+          m.getValue ? m.getValue() : '',
+          null,
+          area > 0,
+          area
+        );
       } catch {}
     });
   } catch {}
@@ -64,12 +98,21 @@ function eduEditorScript(mode, editorId, code) {
   } catch {}
 
   const order = { monaco: 0, ace: 1, cm5: 2, cm6: 3, textarea: 4, editable: 5 };
-  list.sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || b.length - a.length);
+  list.sort(
+    (a, b) =>
+      (order[a.type] ?? 9) - (order[b.type] ?? 9) ||
+      (b.visible ? 1 : 0) - (a.visible ? 1 : 0) ||
+      (b.area || 0) - (a.area || 0) ||
+      b.length - a.length
+  );
 
   if (mode === 'find') return { url: location.href, editors: list };
 
+  const byId = editorId ? list.find((e) => e.id === editorId) : null;
   const target =
-    (editorId && list.find((e) => e.id === editorId)) ||
+    (byId && byId.visible ? byId : null) ||
+    list.find((e) => e.visible && e.value.trim()) ||
+    list.find((e) => e.visible) ||
     list.find((e) => e.value.trim()) ||
     list[0] ||
     null;
@@ -599,7 +642,7 @@ async function handle(msg, sender) {
         const known = (t) => ['monaco', 'ace', 'cm5', 'cm6', 'dom-monaco', 'dom-ace', 'dom-cm5', 'dom-cm6'].includes(t);
         const mainKnown = main.filter((e) => known(e.type));
         const domKnown = dom.filter((e) => known(e.type));
-        const pool = mainKnown.length ? mainKnown : domKnown.length ? domKnown : [...main, ...dom];
+        const pool = mainKnown.length || domKnown.length ? [...mainKnown, ...domKnown] : [...main, ...dom];
         const order = {
           monaco: 0,
           'dom-monaco': 0,
@@ -614,7 +657,13 @@ async function handle(msg, sender) {
           editable: 5,
           'dom-editable': 5
         };
-        pool.sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || (b.length || 0) - (a.length || 0));
+        pool.sort(
+          (a, b) =>
+            (order[a.type] ?? 9) - (order[b.type] ?? 9) ||
+            (b.visible ? 1 : 0) - (a.visible ? 1 : 0) ||
+            (b.area || 0) - (a.area || 0) ||
+            (b.length || 0) - (a.length || 0)
+        );
         if (!pool.length) {
           return {
             ok: false,

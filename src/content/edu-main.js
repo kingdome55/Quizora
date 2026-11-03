@@ -228,7 +228,7 @@
       const el = pickEditor(selector);
       if (!el) continue;
       const value = readEditor(type, el);
-      return { ok: true, url: location.href, editor: { type, id: type, language: '', value, length: value.length } };
+      return { ok: true, url: location.href, editor: { type, id: type, language: '', value, length: value.length, visible: true } };
     }
     return { ok: false, error: '当前 frame 未找到编辑器' };
   }
@@ -336,8 +336,9 @@
         editorType = res.editor.type;
         log(
           'info',
-          `编辑器：${editorType} · frame#${editorFrameId} · ${res.editor.language || '未知语言'} · 模板 ${res.editor.value?.length || 0} 字符`
+          `编辑器：${editorType} · frame#${editorFrameId} · ${res.editor.language || '未知语言'} · 模板 ${res.editor.value?.length || 0} 字符${res.editor.visible === false ? ' · 隐藏模型' : ''}`
         );
+        if (res.editor.visible === false) log('warn', '选中的编辑器模型不可见，可能写到隐藏位置');
         if (res.editors?.length > 1) {
           log('info', `可选编辑器：${res.editors.map((e) => `${e.type}@#${e.frameId}`).join('，')}`);
         }
