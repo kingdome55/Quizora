@@ -4,6 +4,7 @@
 
   const BADGE_ID = '__wg_edu_badge';
   let viewUnlocked = false;
+  let badgeActive = false;
 
   function badgeHtml(detail) {
     return (
@@ -13,6 +14,7 @@
   }
 
   function detailText() {
+    if (badgeActive) return '自动答题运行中（实验）';
     return viewUnlocked ? '粘贴/查看限制已解除 · 参考答案入口已显示' : '粘贴已解锁 · 自动答题可用（实验）';
   }
 
@@ -36,6 +38,12 @@
     renderBadge(el);
     (document.body || document.documentElement).appendChild(el);
   }
+
+  window.addEventListener('quizora-edu-badge', (event) => {
+    badgeActive = Boolean(event.detail?.active);
+    const el = document.getElementById(BADGE_ID);
+    if (el) renderBadge(el);
+  });
 
   window.addEventListener('message', (event) => {
     const data = event.data;

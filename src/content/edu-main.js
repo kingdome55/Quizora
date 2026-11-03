@@ -10,6 +10,7 @@
   let passed = 0;
   let lastReport = '';
   const sleep = A.sleep;
+  const referenceWaiters = new Map();
 
   function send(msg) {
     try {
@@ -25,14 +26,61 @@
     send({ type: 'WG_LOG', level, text });
   }
 
+  window.addEventListener('message', (event) => {
+    const data = event.data;
+    if (!data || data.source !== 'quizora-edu') return;
+    if (data.type !== 'REFERENCE_RESULT' || !data.requestId) return;
+    const resolve = referenceWaiters.get(data.requestId);
+    if (!resolve) return;
+    referenceWaiters.delete(data.requestId);
+    resolve(data);
+  });
+
+  function requestReference(timeout = 12000) {
+    return new Promise((resolve) => {
+      const requestId = `ref-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      referenceWaiters.set(requestId, resolve);
+      try {
+        window.postMessage({ source: 'quizora-edu', type: 'REFERENCE_REQUEST', requestId }, '*');
+      } catch {
+        referenceWaiters.delete(requestId);
+        resolve({ ok: false, error: '无法发送参考答案请求' });
+        return;
+      }
+      setTimeout(() => {
+        if (!referenceWaiters.has(requestId)) return;
+        referenceWaiters.delete(requestId);
+        resolve({ ok: false, error: '参考答案请求超时' });
+      }, timeout);
+    });
+  }
+
+  function requestUnlock(answerId, timeout = 15000) {
+    return new Promise((resolve) => {
+      const requestId = `unlock-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      referenceWaiters.set(requestId, resolve);
+      try {
+        window.postMessage(
+          { source: 'quizora-edu', type: 'REFERENCE_UNLOCK_REQUEST', requestId, answerId },
+          '*'
+        );
+      } catch {
+        referenceWaiters.delete(requestId);
+        resolve({ ok: false, error: '无法发送解锁请求' });
+        return;
+      }
+      setTimeout(() => {
+        if (!referenceWaiters.has(requestId)) return;
+        referenceWaiters.delete(requestId);
+        resolve({ ok: false, error: '参考答案解锁超时' });
+      }, timeout);
+    });
+  }
+
   function setBadge(active) {
-    const el = document.getElementById('__wg_edu_badge');
-    if (!el) return;
-    el.innerHTML =
-      '<div style="font-weight:600;color:#fff">题灵 · 头歌（EduCoder）</div>' +
-      '<div style="font-size:11px;color:#b9b3d4;margin-top:2px">' +
-      (active ? '自动答题运行中（实验）' : '粘贴/查看限制已解除 · 自动答题可用（实验）') +
-      '</div>';
+    try {
+      window.dispatchEvent(new CustomEvent('quizora-edu-badge', { detail: { active: Boolean(active) } }));
+    } catch {}
   }
 
   function report(status, detail, tone = 'work') {
@@ -337,15 +385,38 @@
     return { success: false, failure: true, text: r.text || '评测超时，未获取到结果' };
   }
 
-  async function waitCooldown(tk) {
+  async function waitCooldown(tk, timeout = 90000) {
     const start = Date.now();
-    while (Date.now() - start < 45000) {
+    let lastLog = 0;
+    while (Date.now() - start < timeout) {
       if (!running || tk !== token) return false;
       const btn = A.findExact('评测');
-      if (btn && !A.isDisabled(btn)) return true;
+      const cooling = A.cooldownText?.() || '';
+      if (btn && !A.isDisabled(btn) && !cooling) return true;
+      if (Date.now() - lastLog > 5000) {
+        lastLog = Date.now();
+        log('info', cooling ? `评测冷却中：${cooling}` : '等待“评测”按钮恢复…');
+      }
       await sleep(1000);
     }
     return false;
+  }
+
+  async function waitEvaluateReady(tk, timeout = 90000) {
+    const start = Date.now();
+    let lastLog = 0;
+    while (Date.now() - start < timeout) {
+      if (!running || tk !== token) return null;
+      const btn = A.findExact('评测');
+      const cooling = A.cooldownText?.() || '';
+      if (btn && !A.isDisabled(btn) && !cooling) return btn;
+      if (Date.now() - lastLog > 5000) {
+        lastLog = Date.now();
+        log('info', cooling ? `评测冷却中：${cooling}` : '等待“评测”按钮可用…');
+      }
+      await sleep(1000);
+    }
+    return null;
   }
 
   async function waitEnable(button, timeout = 30000) {
@@ -393,13 +464,52 @@
           return;
         }
 
+        let reference = null;
+        if (settings.eduUseReference !== false && !settings.dryRun) {
+          report('读取答案', '正在读取平台参考答案…', 'work');
+          const ref = await requestReference(12000);
+          if (!running || tk !== token) return;
+          if (ref?.ok && ref.code) {
+            reference = ref;
+            log('ok', `已读取平台参考答案（${ref.code.length} 字符${ref.name ? ` · ${ref.name}` : ''}）`);
+          } else {
+            if (ref?.locked && settings.eduAutoUnlock && ref.answerId) {
+              log(
+                'warn',
+                `参考答案未解锁，正在按设置自动解锁（${ref.score ?? '?'} 金币，平台会留下查看记录）…`
+              );
+              const unlocked = await requestUnlock(ref.answerId, 15000);
+              if (!running || tk !== token) return;
+              if (unlocked?.ok && unlocked.code) {
+                reference = { ok: true, code: unlocked.code, name: '已解锁参考答案' };
+                log('ok', `已解锁并读取参考答案（${reference.code.length} 字符）`);
+              } else {
+                log('warn', `自动解锁失败：${unlocked?.error || '未知错误'}`);
+              }
+            }
+            if (!reference && !ref?.locked && A.readAnswerPanel) {
+              const panel = await A.readAnswerPanel(10000);
+              if (panel && panel.trim()) {
+                reference = { ok: true, code: panel.trim(), name: '页面参考答案' };
+                log('ok', `已从页面读取参考答案（${reference.code.length} 字符）`);
+              }
+            }
+            if (!reference) {
+              const hint = ref?.locked ? '；可在侧边栏勾选“参考答案自动解锁”，或先手动解锁' : '';
+              log('warn', `参考答案不可用：${ref?.error || '未解锁'}${hint}；改用 AI 生成`);
+            }
+          }
+        }
+
         let feedback = '';
         let levelPassed = false;
-        const maxAttempts = Math.max(1, Math.min(6, Number(settings.eduMaxAttempts) || 3));
+        const configuredAttempts = Math.max(1, Math.min(6, Number(settings.eduMaxAttempts) || 3));
+        const maxAttempts = reference ? Math.max(2, configuredAttempts) : configuredAttempts;
+        let useReference = Boolean(reference);
 
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
           if (!running || tk !== token) return;
-          report('生成代码', `第 ${passed + 1} 关 · 第 ${attempt}/${maxAttempts} 次`, 'work');
+          report(useReference ? '写入答案' : '生成代码', `第 ${passed + 1} 关 · 第 ${attempt}/${maxAttempts} 次`, 'work');
           log(
             'info',
             `第 ${passed + 1} 关：${title || '未命名'}（${model.language || '未知语言'}，说明 ${desc.length} 字符，模板 ${model.value.length} 字符）`
@@ -408,10 +518,16 @@
             log('info', `任务说明预览：${desc.slice(0, 140).replace(/\s+/g, ' ')}…`);
           }
 
-          const ans = await send({
-            type: 'EDU_SOLVE',
-            payload: { title, description: desc, language: model.language, code: model.value, error: feedback }
-          });
+          let ans;
+          if (useReference) {
+            ans = { ok: true, code: reference.code, source: 'reference' };
+            log('ok', `使用平台参考答案写入（${ans.code.length} 字符）`);
+          } else {
+            ans = await send({
+              type: 'EDU_SOLVE',
+              payload: { title, description: desc, language: model.language, code: model.value, error: feedback }
+            });
+          }
           if (!running || tk !== token) return;
           if (!ans?.ok) {
             log('error', `代码生成失败：${ans?.error || '未知错误'}`);
@@ -455,12 +571,12 @@
             log('error', '未找到“评测”按钮');
             break;
           }
-          const ready = await waitEnable(btn, 30000);
+          const ready = await waitEvaluateReady(tk, 90000);
           if (!ready) {
-            log('warn', '“评测”按钮在 30 秒内仍不可用');
+            log('warn', '“评测”按钮在 90 秒内仍不可用');
             break;
           }
-          A.click(btn);
+          A.click(ready);
           const result = await waitResult(tk, before);
           if (!running || tk !== token) return;
           if (result.success) {
@@ -473,8 +589,12 @@
           }
           feedback = result.text || '评测未通过';
           log('warn', `第 ${passed + 1} 关第 ${attempt} 次未通过：${feedback.slice(0, 160)}`);
+          if (useReference) {
+            useReference = false;
+            log('warn', '参考答案评测未通过，后续改用 AI 修正');
+          }
           if (attempt < maxAttempts) {
-            const cooled = await waitCooldown(tk);
+            const cooled = await waitCooldown(tk, 90000);
             if (!cooled) {
               log('warn', '等待评测冷却超时');
               break;

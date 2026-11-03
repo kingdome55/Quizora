@@ -43,11 +43,28 @@
 
   function isDisabled(el) {
     if (!el) return true;
+    const t = text(el);
+    if (/\d+\s*秒|倒计时|冷却|等待|稍后/.test(t)) return true;
     return (
       Boolean(el.disabled) ||
       el.getAttribute('aria-disabled') === 'true' ||
       /v-btn--disabled|disabled/i.test(String(el.className || ''))
     );
+  }
+
+  function cooldownText() {
+    const re = /评测.*(频繁|冷却|稍后)|请.*秒后.*(评测|再试)|评测.*(?:等待|倒计时)|(?:冷却|倒计时)\s*\d+/;
+    const list = [
+      ...document.querySelectorAll(
+        'button, [role="button"], .v-btn, [class*="toast"], [class*="message"], [class*="notice"], [class*="tip"], [class*="alert"], .test-result'
+      )
+    ].filter(isVisible);
+    for (const el of list) {
+      const t = text(el);
+      if (!t || t.length > 100) continue;
+      if (re.test(t)) return t.slice(0, 100);
+    }
+    return '';
   }
 
   function click(el) {
@@ -61,6 +78,40 @@
       } catch {}
     }
     return true;
+  }
+
+  function findTextExact(label) {
+    const list = [...document.querySelectorAll('a, button, div, span, li, [role="tab"]')].filter(
+      (el) => isVisible(el) && text(el) === label
+    );
+    return innermost(list)[0] || null;
+  }
+
+  function clickTab(label) {
+    const el = findTextExact(label);
+    if (!el) return false;
+    return click(el);
+  }
+
+  async function readAnswerPanel(timeout = 10000) {
+    clickTab('参考答案');
+    const start = Date.now();
+    let best = '';
+    while (Date.now() - start < timeout) {
+      const inner = [...document.querySelectorAll('.answer-content [id^="answer-content-"]')].filter(isVisible);
+      const nodes = inner.length ? inner : [...document.querySelectorAll('.answer-content')].filter(isVisible);
+      for (const el of nodes) {
+        const t = String(el.innerText || el.textContent || '').trim();
+        if (!t || /禁止复制参考答案/.test(t)) continue;
+        if (t.length > best.length) best = t;
+      }
+      if (best) {
+        clickTab('学习内容');
+        return best;
+      }
+      await sleep(400);
+    }
+    return '';
   }
 
   function marker(re) {
@@ -167,7 +218,7 @@
     const nextBtn = findLike(/^(下一关|下一题|继续|进入下一关)$/);
     const title = taskTitle();
     const taskPath = /\/tasks\//i.test(location.pathname);
-    const count = !reason && evalBtn && (hasEditor || taskPath) ? 1 : 0;
+    const count = !reason && (taskPath || hasEditor) && (hasEditor || evalBtn) ? 1 : 0;
     const question = {
       index: 0,
       type: 'code',
@@ -198,10 +249,10 @@
       result: resultPanelText().slice(0, 300),
       diagnostics: reason
         ? { error: `已拒绝：${reason}` }
-        : !hasEditor
-          ? { error: '未检测到 Monaco 编辑器' }
+        : !hasEditor && !evalBtn
+          ? { error: '未检测到编辑器与“评测”按钮' }
           : !evalBtn
-            ? { error: '未找到“评测”按钮' }
+            ? { warn: '“评测”按钮暂不可用，将在评测前等待' }
             : null
     };
   }
@@ -229,7 +280,11 @@
     findExact,
     findLike,
     isDisabled,
+    cooldownText,
     click,
+    findTextExact,
+    clickTab,
+    readAnswerPanel,
     readResult,
     resultPanelText,
     fingerprint,

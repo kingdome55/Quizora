@@ -8,7 +8,9 @@ export const DEFAULT_CONFIG = {
   examSkipAnswered: true,
   useCache: true,
   examScrollLoad: true,
-  eduMaxAttempts: 3
+  eduMaxAttempts: 3,
+  eduUseReference: true,
+  eduAutoUnlock: false
 };
 
 const KEY = 'wg_config_v1';

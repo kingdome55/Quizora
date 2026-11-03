@@ -306,8 +306,17 @@ async function startRun(tabIdArg) {
   if (run.running) await stopRun();
   pushLog('info', '正在启动…');
   try {
+    if (site.id === 'educoder') clearFrame(tab.id);
     const multi = site.id === 'chaoxing';
-    const picked = multi ? await pickFrames(tab, site.files) : await pickFrame(tab, site.files);
+    let picked = multi ? await pickFrames(tab, site.files) : await pickFrame(tab, site.files);
+    if (site.id === 'educoder' && !picked.usable) {
+      for (let retry = 0; retry < 2; retry += 1) {
+        await new Promise((r) => setTimeout(r, 1500));
+        clearFrame(tab.id);
+        picked = await pickFrame(tab, site.files);
+        if (picked.usable) break;
+      }
+    }
     const targets = multi
       ? picked.frames || []
       : picked.usable
@@ -376,9 +385,16 @@ async function startRun(tabIdArg) {
 async function stopRun() {
   const tabId = run.tabId || (await resolveTab())?.id;
   if (tabId) {
-    try {
-      await chrome.tabs.sendMessage(tabId, { type: 'WG_STOP' });
-    } catch {}
+    const frameIds = new Set([0]);
+    if (run.frames instanceof Map) {
+      for (const frameId of run.frames.keys()) frameIds.add(frameId);
+    }
+    await Promise.all(
+      [...frameIds].map((frameId) =>
+        chrome.tabs.sendMessage(tabId, { type: 'WG_STOP' }, { frameId }).catch(() => {})
+      )
+    );
+    clearFrame(tabId);
   }
   resetRun('已停止');
   return { ok: true };
@@ -397,7 +413,16 @@ async function probe(tabIdArg) {
   if (!site) return { ok: false, error: '当前标签页不是支持的对局或考试页' };
   pushLog('info', '正在探测页面…');
   try {
-    const picked = await pickFrame(tab, site.files);
+    if (site.id === 'educoder') clearFrame(tab.id);
+    let picked = await pickFrame(tab, site.files);
+    if (site.id === 'educoder' && !picked.usable) {
+      for (let retry = 0; retry < 2; retry += 1) {
+        await new Promise((r) => setTimeout(r, 1200));
+        clearFrame(tab.id);
+        picked = await pickFrame(tab, site.files);
+        if (picked.usable) break;
+      }
+    }
     let check = null;
     if (!picked.usable) {
       logInjection(picked.injection);
@@ -681,7 +706,7 @@ async function handle(msg, sender) {
     case 'EDU_VIEW_UNLOCKED': {
       lastState = {
         status: '头歌（EduCoder）',
-        detail: '粘贴/查看限制已解除（含参考答案入口）；点“开始”可自动答题（实验）',
+        detail: '粘贴/查看限制已解除（含参考答案入口）；点“开始”会优先使用平台标准答案，失败回退 AI',
         tone: 'ok',
         site: 'educoder'
       };
