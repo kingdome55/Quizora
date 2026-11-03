@@ -137,6 +137,13 @@ function eduEditorScript(mode, editorId, code) {
     list[0] ||
     null;
   if (!target) return { ok: false, error: '未找到代码编辑器' };
+  const done = (length) => ({
+    ok: true,
+    id: target.id,
+    type: target.type,
+    length,
+    visible: target.visible
+  });
 
   const idx = Number(String(target.id).split(':')[1] || 0);
   try {
@@ -144,26 +151,26 @@ function eduEditorScript(mode, editorId, code) {
       const model = window.monaco.editor.getModels()[idx];
       if (!model) return { ok: false, error: 'Monaco 模型不存在' };
       model.setValue(code);
-      return { ok: true, id: target.id, type: target.type, length: model.getValue().length };
+      return done(model.getValue().length);
     }
     if (target.type === 'ace') {
       const ed = document.querySelectorAll('.ace_editor')[idx]?.env?.editor;
       if (!ed) return { ok: false, error: 'Ace 实例不存在' };
       ed.setValue(code, -1);
-      return { ok: true, id: target.id, type: target.type, length: ed.getValue().length };
+      return done(ed.getValue().length);
     }
     if (target.type === 'cm5') {
       const cm = document.querySelectorAll('.CodeMirror')[idx]?.CodeMirror;
       if (!cm) return { ok: false, error: 'CodeMirror 5 实例不存在' };
       cm.setValue(code);
-      return { ok: true, id: target.id, type: target.type, length: cm.getValue().length };
+      return done(cm.getValue().length);
     }
     if (target.type === 'cm6') {
       const el = document.querySelectorAll('.cm-editor')[idx];
       const view = el?.cmView?.view || el?.cmView;
       if (view?.state?.doc && view.dispatch) {
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: code } });
-        return { ok: true, id: target.id, type: target.type, length: view.state.doc.toString().length };
+        return done(view.state.doc.toString().length);
       }
       const content = el?.querySelector('.cm-content');
       if (!content) return { ok: false, error: 'CodeMirror 6 实例不存在' };
@@ -174,7 +181,7 @@ function eduEditorScript(mode, editorId, code) {
       sel.removeAllRanges();
       sel.addRange(range);
       document.execCommand('insertText', false, code);
-      return { ok: true, id: target.id, type: target.type, length: content.innerText.length };
+      return done(content.innerText.length);
     }
     if (target.type === 'textarea') {
       const el = [...document.querySelectorAll('textarea')]
@@ -186,7 +193,7 @@ function eduEditorScript(mode, editorId, code) {
       else el.value = code;
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      return { ok: true, id: target.id, type: target.type, length: el.value.length };
+      return done(el.value.length);
     }
     if (target.type === 'editable') {
       const el = [...document.querySelectorAll('[contenteditable="true"]')].filter((e) => !e.closest('.cm-editor'))[idx];
@@ -199,7 +206,7 @@ function eduEditorScript(mode, editorId, code) {
       sel.addRange(range);
       document.execCommand('insertText', false, code);
       el.dispatchEvent(new InputEvent('input', { bubbles: true }));
-      return { ok: true, id: target.id, type: target.type, length: el.innerText.length };
+      return done(el.innerText.length);
     }
   } catch (e) {
     return { ok: false, error: String(e?.message || e) };

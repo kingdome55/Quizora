@@ -390,11 +390,13 @@
     if (!src) return src;
     const codeHasMarkers = /#代码开始/.test(src) && /#代码结束/.test(src);
     if (codeHasMarkers) return src;
-    const tplStart = tpl.search(/#代码开始[^\n]*\n?/);
-    const tplEnd = tpl.search(/#代码结束/);
-    if (tplStart < 0 || tplEnd < tplStart) {
+    const starts = [...tpl.matchAll(/#代码开始[^\n]*/g)].map((m) => m.index);
+    const ends = [...tpl.matchAll(/#代码结束/g)].map((m) => m.index);
+    if (!starts.length || !ends.length || ends[ends.length - 1] < starts[0]) {
       return src.replace(/^\s*use\s+library\s*;\s*/i, '').trim();
     }
+    const tplStart = starts[0];
+    const tplEnd = ends[ends.length - 1];
     const startLineEnd = tpl.indexOf('\n', tplStart);
     const prefix = startLineEnd >= 0 ? tpl.slice(0, startLineEnd + 1) : `${tpl.slice(0, tplStart)}#代码开始\n`;
     const suffix = tpl.slice(tplEnd);
@@ -640,11 +642,10 @@
           }
           model.value = writeCode;
 
-          // 回读可见编辑器，确认代码确实写进了页面显示的区域
-          const readBack = domFind();
-          const visibleText = String(readBack?.editor?.value || '');
-          if (!visibleText || normCode(visibleText) !== codeNorm) {
-            log('warn', `写入后可见编辑器未包含目标代码（${visibleText.length} 字符），尝试 DOM 覆盖…`);
+          // API 写入（Monaco/CM/Ace）以 setValue 返回的长度为准；
+          // 只有写入目标被标记为隐藏时才用 DOM 兜底，避免拿 CodeMirror 虚拟行文本误判。
+          if (wr.visible === false) {
+            log('warn', '写入目标是隐藏编辑器，尝试 DOM 覆盖…');
             const domType =
               model.type === 'monaco'
                 ? 'dom-monaco'
@@ -658,12 +659,6 @@
             const dr = await domSet(domType, writeCode);
             if (!dr?.ok) {
               log('error', `DOM 覆盖写入失败：${dr?.error || '未知错误'}，停止评测`);
-              break;
-            }
-            await sleep(220);
-            const after = domFind();
-            if (!after?.editor?.value || normCode(after.editor.value) !== codeNorm) {
-              log('error', 'DOM 覆盖后可见编辑器仍未包含目标代码，停止评测');
               break;
             }
             log('ok', `已通过 DOM 覆盖写入可见编辑器（${dr.length || writeCode.length} 字符）`);
