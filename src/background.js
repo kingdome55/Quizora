@@ -721,7 +721,7 @@ async function handle(msg, sender) {
           try {
             const mainResults = await runEduEditor(tabId, [frameId], 'set', msg.editorId || '', msg.code);
             const mainResult = mainResults?.[0]?.result;
-            if (mainResult?.ok) return mainResult;
+            if (mainResult?.ok && mainResult.visible !== false) return mainResult;
           } catch {}
           const res = await chrome.tabs.sendMessage(
             tabId,

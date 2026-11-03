@@ -2,6 +2,20 @@
 
 本项目采用语义化版本。当前处于公开测试阶段（0.x），接口与行为仍可能调整。
 
+## [0.7.15] - 2026-11-03
+
+### Fixed（仍选 dom-monaco / DOM 兜底找不到容器）
+
+- 0.7.14 日志仍显示 `编辑器：dom-monaco`：`domFind` 按选择器顺序优先返回 `.monaco-editor`，忽略了更大的可见 `.CodeMirror`。
+- 0.7.15 起 `domFind` 遍历所有编辑器类型，按**屏幕内可见面积**选择最大者；`pickEditor` 增加视口过滤，排除屏幕外/隐藏容器。
+- `findEduEditors` 排序改为“可见优先 → MAIN world API 优先”，页面同时存在 `dom-monaco` 与 `cm5` 时优先 `cm5`。
+- 背景 `EDU_SET_CODE` 对 `dom-*` 的 MAIN 写入结果，如果 `visible=false` 不再接受，改为向正确 frame 发送 `EDU_DOM_SET`，避免在 `edu-main` 所在 frame 找不到容器。
+- 0.7.14 的 `wr` 作用域修复继续保留。
+
+### Tested
+
+- JS 语法、模板合并、可见 Monaco 回退测试继续通过。
+
 ## [0.7.14] - 2026-11-03
 
 ### Fixed（wr is not defined / 编辑器优先级）

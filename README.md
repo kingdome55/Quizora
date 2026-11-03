@@ -7,7 +7,7 @@
 <p align="center">在已打开的答题页面上自动识别整卷题目、调用大模型判题并填写答案 —— 不自动交卷。</p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-0.7.14-6D28D9" />
+  <img alt="version" src="https://img.shields.io/badge/version-0.7.15-6D28D9" />
   <img alt="manifest" src="https://img.shields.io/badge/Manifest-V3-2563EB" />
   <img alt="platform" src="https://img.shields.io/badge/Edge%20%7C%20Chrome-Side%20Panel-10B981" />
   <img alt="license" src="https://img.shields.io/badge/license-MIT-10B981" />
@@ -62,7 +62,7 @@
 
 ### 方式一：使用发布包（推荐）
 
-1. 下载安装包：[GitHub Release v0.7.14](https://github.com/kingdome55/Quizora/releases/download/v0.7.14/quizora-v0.7.14.zip)（备用：[仓库内 ZIP](release/quizora-v0.7.14.zip)）。
+1. 下载安装包：[GitHub Release v0.7.15](https://github.com/kingdome55/Quizora/releases/download/v0.7.15/quizora-v0.7.15.zip)（备用：[仓库内 ZIP](release/quizora-v0.7.15.zip)）。
 2. **完整解压**到一个固定目录，例如 `D:\Quizora\`。解压后该目录里应直接看到 `manifest.json`。
 3. 打开 `edge://extensions`（Chrome 为 `chrome://extensions`）。
 4. 打开右上角“开发人员模式”。
@@ -163,7 +163,7 @@ release/                 发布包（ZIP）
 Get-ChildItem -Recurse -File -Filter *.js | ForEach-Object { node --check $_.FullName }
 Get-Content manifest.json -Raw | ConvertFrom-Json | Out-Null
 
-# 生产构建（生成 dist/ 与 release/quizora-v0.7.14.zip）
+# 生产构建（生成 dist/ 与 release/quizora-v0.7.15.zip）
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 

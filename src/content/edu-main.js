@@ -229,6 +229,9 @@
           continue;
         }
         if (rect.width < 120 || rect.height < 50) continue;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        if (rect.bottom <= 0 || rect.right <= 0 || rect.top >= vh || rect.left >= vw) continue;
         const area = rect.width * rect.height;
         if (!best || area > best.area) best = { el, area };
       }
@@ -259,11 +262,34 @@
       ['textarea', 'dom-textarea'],
       ['[contenteditable="true"]', 'dom-editable']
     ];
+    const candidates = [];
     for (const [selector, type] of tries) {
       const el = pickEditor(selector);
       if (!el) continue;
+      let area = 0;
+      try {
+        const r = el.getBoundingClientRect();
+        area = r.width * r.height;
+      } catch {}
       const value = readEditor(type, el);
-      return { ok: true, url: location.href, editor: { type, id: type, language: '', value, length: value.length, visible: true } };
+      candidates.push({ type, el, area, value });
+    }
+    candidates.sort((a, b) => b.area - a.area);
+    const best = candidates[0];
+    if (best) {
+      return {
+        ok: true,
+        url: location.href,
+        editor: {
+          type: best.type,
+          id: best.type,
+          language: '',
+          value: best.value,
+          length: best.value.length,
+          visible: true,
+          area: best.area
+        }
+      };
     }
     return { ok: false, error: '当前 frame 未找到编辑器' };
   }
