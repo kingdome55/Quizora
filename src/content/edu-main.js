@@ -410,23 +410,63 @@
     return null;
   }
 
+  // 收集文本中每一组 #代码开始 / #代码结束 之间的实现代码。
+  // 参考答案或 AI 回复可能带回多组标记，取内容最长的一组，避免把重复模板写进编辑器。
+  function markerBodies(text) {
+    const src = String(text || '');
+    const bodies = [];
+    let from = 0;
+    while (from < src.length) {
+      const start = src.indexOf('#代码开始', from);
+      if (start < 0) break;
+      const lineEnd = src.indexOf('\n', start);
+      if (lineEnd < 0) break;
+      const end = src.indexOf('#代码结束', lineEnd + 1);
+      if (end < 0) break;
+      bodies.push(src.slice(lineEnd + 1, end));
+      from = end + '#代码结束'.length;
+    }
+    return bodies;
+  }
+
+  function pickBody(text) {
+    return markerBodies(text)
+      .map((b) => b.trim())
+      .filter(Boolean)
+      .reduce((best, cur) => (cur.replace(/\s+/g, '').length > best.replace(/\s+/g, '').length ? cur : best), '');
+  }
+
   function mergeWithTemplate(template, code) {
     const tpl = String(template || '');
-    let src = String(code || '').trim();
+    const src = String(code || '').trim();
     if (!src) return src;
     const codeHasMarkers = /#代码开始/.test(src) && /#代码结束/.test(src);
-    if (codeHasMarkers) return src;
     const starts = [...tpl.matchAll(/#代码开始[^\n]*/g)].map((m) => m.index);
     const ends = [...tpl.matchAll(/#代码结束/g)].map((m) => m.index);
-    if (!starts.length || !ends.length || ends[ends.length - 1] < starts[0]) {
+    const tplHasMarkers = starts.length && ends.length && ends[ends.length - 1] >= starts[0];
+    if (!tplHasMarkers) {
+      if (codeHasMarkers) {
+        return src
+          .replace(/^[^\n]*#代码开始[^\n]*\n?/gm, '')
+          .replace(/^[^\n]*#代码结束[^\n]*\n?/gm, '')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+      }
       return src.replace(/^\s*use\s+library\s*;\s*/i, '').trim();
     }
+    // 模板可能已被上一次写入叠加成多组标记：前缀取第一组之前，后缀取最后一组之后，中间的重复模板全部丢弃。
     const tplStart = starts[0];
     const tplEnd = ends[ends.length - 1];
     const startLineEnd = tpl.indexOf('\n', tplStart);
     const prefix = startLineEnd >= 0 ? tpl.slice(0, startLineEnd + 1) : `${tpl.slice(0, tplStart)}#代码开始\n`;
     const suffix = tpl.slice(tplEnd);
-    const body = src.replace(/^\s*use\s+library\s*;\s*/i, '').trim();
+    let body;
+    if (codeHasMarkers) {
+      body = pickBody(src);
+      if (!body) return src;
+    } else {
+      body = src.replace(/^\s*use\s+library\s*;\s*/i, '').trim();
+    }
     return `${prefix}${body}\n${suffix}`.replace(/\n{3,}/g, '\n\n');
   }
 
@@ -670,28 +710,12 @@
           }
           model.value = writeCode;
 
-          // API 写入（Monaco/CM/Ace）以 setValue 返回的长度为准；
-          // 只有写入目标被标记为隐藏时才用 DOM 兜底，避免拿 CodeMirror 虚拟行文本误判。
+          // API 写入（Monaco/CM/Ace）以 setValue 返回的长度为准。
+          // 隐藏模型不再用 DOM insertText 兜底：insertText 会在光标处追加，正是重复代码的来源。
           if (wr?.visible === false) {
-            log('warn', '写入目标是隐藏编辑器，尝试 DOM 覆盖…');
-            const domType =
-              model.type === 'monaco'
-                ? 'dom-monaco'
-                : model.type === 'ace'
-                  ? 'dom-ace'
-                  : model.type === 'cm5'
-                    ? 'dom-cm5'
-                    : model.type === 'cm6'
-                      ? 'dom-cm6'
-                      : model.type;
-            const dr = await domSet(domType, writeCode);
-            if (!dr?.ok) {
-              log('error', `DOM 覆盖写入失败：${dr?.error || '未知错误'}，停止评测`);
-              break;
-            }
-            log('ok', `已通过 DOM 覆盖写入可见编辑器（${dr.length || writeCode.length} 字符）`);
+            log('error', '写入目标是隐藏编辑器，已跳过 DOM 追加以避免重复代码；请切换到代码编辑页后重试');
+            break;
           }
-          model.value = writeCode;
 
           report('评测中', `第 ${passed + 1} 关 · 第 ${attempt}/${maxAttempts} 次`, 'work');
           const before = evalBaseline();

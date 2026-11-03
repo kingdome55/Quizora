@@ -15,6 +15,24 @@ function eduEditorScript(mode, editorId, code) {
       return false;
     }
   };
+  const areaOf = (el) => {
+    try {
+      const r = el.getBoundingClientRect();
+      return Math.max(0, r.width * r.height);
+    } catch {
+      return 0;
+    }
+  };
+  const onScreen = (el) => {
+    try {
+      const r = el.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      return r.width >= 20 && r.height >= 10 && r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw;
+    } catch {
+      return false;
+    }
+  };
   const list = [];
   const add = (type, id, language, value, el, visibleOverride, areaOverride) => {
     const text = String(value == null ? '' : value);
@@ -92,7 +110,10 @@ function eduEditorScript(mode, editorId, code) {
   try {
     [...document.querySelectorAll('.CodeMirror')].forEach((el, i) => {
       const cm = el.CodeMirror;
-      if (cm?.getValue) add('cm5', `cm5:${i}`, cm.getMode?.()?.name || '', cm.getValue(), el);
+      if (cm?.getValue) {
+        // visible 表示真实渲染（有布局尺寸），是否在视口内只影响写入优先级，不影响是否算隐藏。
+        add('cm5', `cm5:${i}`, cm.getMode?.()?.name || '', cm.getValue(), el, rectOk(el), areaOf(el));
+      }
     });
   } catch {}
   try {
@@ -137,12 +158,13 @@ function eduEditorScript(mode, editorId, code) {
     list[0] ||
     null;
   if (!target) return { ok: false, error: '未找到代码编辑器' };
-  const done = (length) => ({
+  const done = (length, extra = {}) => ({
     ok: true,
     id: target.id,
     type: target.type,
     length,
-    visible: target.visible
+    visible: target.visible,
+    ...extra
   });
 
   const idx = Number(String(target.id).split(':')[1] || 0);
@@ -160,10 +182,18 @@ function eduEditorScript(mode, editorId, code) {
       return done(ed.getValue().length);
     }
     if (target.type === 'cm5') {
-      const cm = document.querySelectorAll('.CodeMirror')[idx]?.CodeMirror;
+      const nodes = [...document.querySelectorAll('.CodeMirror')];
+      const visible = nodes
+        .map((el, i) => ({ el, i, cm: el.CodeMirror, area: areaOf(el), onScreen: onScreen(el) }))
+        .filter((x) => x.cm && x.onScreen)
+        .sort((a, b) => b.area - a.area)[0];
+      const cm = visible?.cm || nodes[idx]?.CodeMirror;
       if (!cm) return { ok: false, error: 'CodeMirror 5 实例不存在' };
       cm.setValue(code);
-      return done(cm.getValue().length);
+      return done(
+        cm.getValue().length,
+        visible ? { id: `cm5:${visible.i}`, visible: true } : {}
+      );
     }
     if (target.type === 'cm6') {
       const el = document.querySelectorAll('.cm-editor')[idx];
@@ -714,13 +744,16 @@ async function handle(msg, sender) {
       const tabId = sender?.tab?.id;
       if (!tabId || typeof msg.code !== 'string') return { ok: false, error: '缺少代码' };
       const frameId = Number.isInteger(msg.frameId) ? msg.frameId : sender?.frameId ?? 0;
+      const setInFrame = async (frame, id) => {
+        const results = await runEduEditor(tabId, [frame], 'set', id || '', msg.code);
+        return results?.[0]?.result || { ok: false, error: '无返回' };
+      };
       try {
         if (/^dom-/.test(msg.editorType || '')) {
           // DOM 探测到的编辑器优先尝试 MAIN world 的 Monaco/CM/Ace API，
           // API 写入是覆盖式 setValue，不会像 insertText 一样把答案插到模板前面。
           try {
-            const mainResults = await runEduEditor(tabId, [frameId], 'set', msg.editorId || '', msg.code);
-            const mainResult = mainResults?.[0]?.result;
+            const mainResult = await setInFrame(frameId, msg.editorId);
             if (mainResult?.ok && mainResult.visible !== false) return mainResult;
           } catch {}
           const res = await chrome.tabs.sendMessage(
@@ -730,8 +763,23 @@ async function handle(msg, sender) {
           );
           return res || { ok: false, error: '无返回' };
         }
-        const results = await runEduEditor(tabId, [frameId], 'set', msg.editorId || '', msg.code);
-        return results?.[0]?.result || { ok: false, error: '无返回' };
+        const first = await setInFrame(frameId, msg.editorId);
+        if (first?.ok && first.visible !== false) return first;
+        // 目标帧只有隐藏模型时，跨 frame 找可见编辑器重新覆盖写入，避免 DOM 追加造成重复代码。
+        try {
+          const all = await findEduEditors(tabId);
+          const visible = all
+            .filter((e) => e.visible && ['monaco', 'ace', 'cm5', 'cm6', 'textarea', 'editable'].includes(e.type))
+            .sort((a, b) => (b.area || 0) - (a.area || 0));
+          for (const e of visible) {
+            if (e.frameId === frameId && e.id === msg.editorId) continue;
+            try {
+              const retried = await setInFrame(e.frameId, e.id);
+              if (retried?.ok && retried.visible !== false) return retried;
+            } catch {}
+          }
+        } catch {}
+        return first || { ok: false, error: '无返回' };
       } catch (e) {
         return { ok: false, error: String(e?.message || e) };
       }

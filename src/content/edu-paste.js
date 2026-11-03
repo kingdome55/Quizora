@@ -1,6 +1,6 @@
 (() => {
   if (window.__quizoraPasteUnlock) return;
-  window.__quizoraPasteUnlock = '0.7.10';
+  window.__quizoraPasteUnlock = '0.7.16';
   if (/\/exam\b/i.test(location.pathname)) return;
 
   const AK = 'e9dd5b4322f9f7d83d009de9bfa100c3';
@@ -133,9 +133,9 @@
     if (announced) return;
     announced = true;
     try {
-      window.postMessage({ source: 'quizora-edu', type: 'VIEW_UNLOCKED', version: '0.7.10' }, '*');
+      window.postMessage({ source: 'quizora-edu', type: 'VIEW_UNLOCKED', version: '0.7.16' }, '*');
     } catch {}
-    console.info('[题灵] 头歌查看限制已解除（含参考答案入口，0.7.10）');
+    console.info('[题灵] 头歌查看限制已解除（含参考答案入口，0.7.16）');
   }
 
   function decodeEntities(value) {
@@ -665,5 +665,5 @@
 
   if (document.documentElement) boot();
   else document.addEventListener('DOMContentLoaded', boot, { once: true });
-  console.info('[题灵] 头歌粘贴/查看限制已解除（0.7.10）');
+  console.info('[题灵] 头歌粘贴/查看限制已解除（0.7.16）');
 })();
